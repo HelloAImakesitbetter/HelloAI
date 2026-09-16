@@ -14,6 +14,9 @@ export default function Home() {
   const [audioDataUrl, setAudioDataUrl] = useState("");
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [videoUrl, setVideoUrl] = useState("");
+  const [aiVideoUrl, setAiVideoUrl] = useState("");
+  const [aiVideoStatus, setAiVideoStatus] = useState("");
+  const [isGeneratingAiVideo, setIsGeneratingAiVideo] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +60,8 @@ export default function Home() {
       setScenes([]);
       setAudioDataUrl("");
       setVideoUrl("");
+      setAiVideoUrl("");
+      setAiVideoStatus("");
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -65,6 +70,76 @@ export default function Home() {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const generateAiVideo = async () => {
+    if (!result) {
+      return;
+    }
+
+    setIsGeneratingAiVideo(true);
+    setAiVideoStatus("Submitting video job...");
+    setError("");
+
+    try {
+      const response = await fetch("/api/ai-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessName, script: result }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to start AI video generation");
+      }
+
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        const statusResponse = await fetch(
+          `/api/ai-video/status?id=${encodeURIComponent(data.id)}`
+        );
+        const statusData = await statusResponse.json();
+
+        if (!statusResponse.ok) {
+          throw new Error(statusData.error || "Failed to check video status");
+        }
+
+        setAiVideoStatus(
+          statusData.status === "completed"
+            ? "Video ready"
+            : `Creating moving video... ${statusData.progress || 0}%`
+        );
+
+        if (statusData.status === "failed") {
+          throw new Error(statusData.error || "AI video generation failed");
+        }
+
+        if (statusData.status === "completed") {
+          const downloadResponse = await fetch(
+            `/api/ai-video/download?id=${encodeURIComponent(data.id)}`
+          );
+
+          if (!downloadResponse.ok) {
+            const downloadData = await downloadResponse.json().catch(() => null);
+            throw new Error(downloadData?.error || "Failed to download AI video");
+          }
+
+          setAiVideoUrl(URL.createObjectURL(await downloadResponse.blob()));
+          return;
+        }
+      }
+
+      throw new Error("Video generation timed out. Please try again.");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Failed to generate AI video"
+      );
+      setAiVideoStatus("");
+    } finally {
+      setIsGeneratingAiVideo(false);
     }
   };
 
@@ -233,6 +308,17 @@ export default function Home() {
             Generate Voiceover
           </button>
 
+          <button
+            type="button"
+            onClick={generateAiVideo}
+            disabled={isGeneratingAiVideo}
+            className="mt-4 ml-3 bg-black text-white px-6 py-3 rounded disabled:opacity-50"
+          >
+            {isGeneratingAiVideo ? "Creating Moving Video..." : "Generate AI Video"}
+          </button>
+
+          {aiVideoStatus && <p className="mt-4">{aiVideoStatus}</p>}
+
           {audioUrl && (
             <audio controls className="mt-4 w-full">
               <source src={audioUrl} type="audio/mpeg" />
@@ -292,6 +378,20 @@ export default function Home() {
             className="mt-4 inline-block bg-black text-white px-6 py-3 rounded"
           >
             Download MP4
+          </a>
+        </section>
+      )}
+
+      {aiVideoUrl && (
+        <section className="mt-8 border p-4 rounded">
+          <h2 className="font-bold mb-4">AI Video</h2>
+          <video controls src={aiVideoUrl} className="w-full" />
+          <a
+            href={aiVideoUrl}
+            download="ai-business-video.mp4"
+            className="mt-4 inline-block bg-black text-white px-6 py-3 rounded"
+          >
+            Download AI Video
           </a>
         </section>
       )}
