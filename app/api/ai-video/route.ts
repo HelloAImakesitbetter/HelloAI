@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       model: "sora-2",
       seconds: "8",
       size: "1280x720",
-      prompt: `Create a polished, realistic commercial video for ${businessName || "this business"}. Show continuous natural motion, camera movement, and people interacting with the setting. Do not show captions, subtitles, logos, or text on screen. Use this marketing script as creative direction:\n\n${script}`,
+      prompt: `Create a polished, realistic commercial video for ${businessName || "this business"}. Show exactly five distinct adult characters together in the scene: a diverse team of three staff members and two customers. Give each person a clearly different appearance, position, and natural action so all five remain visible and recognizable. Show continuous natural motion, camera movement, eye contact, and the group interacting with the setting. Do not show captions, subtitles, logos, or text on screen. Use this marketing script as creative direction:\n\n${script}`,
     });
 
     return Response.json({ id: video.id, status: video.status, progress: video.progress });
