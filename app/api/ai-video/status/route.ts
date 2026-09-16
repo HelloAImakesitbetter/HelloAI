@@ -3,25 +3,25 @@ import RunwayML from "@runwayml/sdk";
 export async function GET(req: Request) {
   try {
     const apiKey = process.env.RUNWAYML_API_SECRET;
-    const id = new URL(req.url).searchParams.get("id");
+    const ids = new URL(req.url).searchParams.get("ids")?.split(",").filter(Boolean) || [];
 
     if (!apiKey) {
       throw new Error("RUNWAYML_API_SECRET is not configured");
     }
 
-    if (!id) {
-      return Response.json({ error: "A video ID is required" }, { status: 400 });
+    if (ids.length === 0) {
+      return Response.json({ error: "Video IDs are required" }, { status: 400 });
     }
 
     const runway = new RunwayML({ apiKey });
-    const task = await runway.tasks.retrieve(id);
-    const status = task.status.toLowerCase();
+    const tasks = await Promise.all(ids.map((id) => runway.tasks.retrieve(id)));
+    const failedTask = tasks.find((task) => task.status === "FAILED");
+    const completedCount = tasks.filter((task) => task.status === "SUCCEEDED").length;
 
     return Response.json({
-      id: task.id,
-      status: status === "succeeded" ? "completed" : status === "failed" ? "failed" : "in_progress",
-      progress: status === "succeeded" ? 100 : 0,
-      error: task.status === "FAILED" ? task.failure : null,
+      status: failedTask ? "failed" : completedCount === tasks.length ? "completed" : "in_progress",
+      progress: Math.round((completedCount / tasks.length) * 100),
+      error: failedTask?.failure || null,
     });
   } catch (error) {
     console.error("AI video status failed:", error);

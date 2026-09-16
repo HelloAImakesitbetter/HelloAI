@@ -94,10 +94,14 @@ export default function Home() {
         throw new Error(data.error || "Failed to start AI video generation");
       }
 
-      for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (!Array.isArray(data.ids) || data.ids.length === 0) {
+        throw new Error("The video service did not return any jobs");
+      }
+
+      for (let attempt = 0; attempt < 90; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
         const statusResponse = await fetch(
-          `/api/ai-video/status?id=${encodeURIComponent(data.id)}`
+          `/api/ai-video/status?ids=${encodeURIComponent(data.ids.join(","))}`
         );
         const statusData = await statusResponse.json();
 
@@ -116,9 +120,11 @@ export default function Home() {
         }
 
         if (statusData.status === "completed") {
-          const downloadResponse = await fetch(
-            `/api/ai-video/download?id=${encodeURIComponent(data.id)}`
-          );
+          const downloadResponse = await fetch("/api/ai-video/download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: data.ids, audioDataUrl }),
+          });
 
           if (!downloadResponse.ok) {
             const downloadData = await downloadResponse.json().catch(() => null);

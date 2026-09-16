@@ -32,16 +32,24 @@ export async function POST(req: Request) {
     }
 
     const runway = new RunwayML({ apiKey });
-    const task = await runway.imageToVideo.create({
-      model: "seedance2_5",
-      promptImage,
-      promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. Animate exactly five distinct adult characters visible in the reference image, keeping each person's appearance consistent. Show natural movement, camera motion, eye contact, and interaction among the group. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 1000),
-      ratio: "1280:720",
-      duration: 30,
-      audio: true,
-    });
+    const prompts = [
+      "Opening and setup: establish the location and introduce the group.",
+      "Continuation and payoff: show the group interacting naturally and conclude the commercial.",
+    ];
+    const tasks = await Promise.all(
+      prompts.map((segment) =>
+        runway.imageToVideo.create({
+          model: "seedance2_5",
+          promptImage,
+          promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. This is one part of a two-part, one-minute video. ${segment} Animate exactly five distinct adult characters visible in the reference image, keeping each person's appearance consistent. Show natural movement, camera motion, eye contact, and interaction among the group. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 15000),
+          ratio: "1280:720",
+          duration: 30,
+          audio: false,
+        })
+      )
+    );
 
-    return Response.json({ id: task.id, status: "queued", progress: 0 });
+    return Response.json({ ids: tasks.map((task) => task.id), status: "queued", progress: 0 });
   } catch (error) {
     console.error("AI video generation failed:", error);
 
