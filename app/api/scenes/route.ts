@@ -59,6 +59,8 @@ export async function POST(req: Request) {
           model: "gpt-image-1",
           prompt: scene.imagePrompt,
           size: "1024x1024",
+          quality: "low",
+          output_format: "jpeg",
         });
         const imageData = image.data?.[0]?.b64_json;
 
@@ -68,7 +70,7 @@ export async function POST(req: Request) {
 
         return {
           ...scene,
-          imageUrl: `data:image/png;base64,${imageData}`,
+          imageUrl: `data:image/jpeg;base64,${imageData}`,
         };
       })
     );
