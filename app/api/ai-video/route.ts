@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const task = await runway.imageToVideo.create({
       model: "gen4.5",
       promptImage,
-      promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. Animate the people and environment with natural movement, camera motion, eye contact, and interaction. Keep the characters' appearance consistent with the reference image. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 1000),
+      promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. Animate exactly five distinct adult characters visible in the reference image, keeping each person's appearance consistent. Show natural movement, camera motion, eye contact, and interaction among the group. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 1000),
       ratio: "1280:720",
       duration: 10,
       outputFormat: "mp4",
