@@ -33,12 +33,12 @@ export async function POST(req: Request) {
 
     const runway = new RunwayML({ apiKey });
     const task = await runway.imageToVideo.create({
-      model: "gen4.5",
+      model: "seedance2_5",
       promptImage,
       promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. Animate exactly five distinct adult characters visible in the reference image, keeping each person's appearance consistent. Show natural movement, camera motion, eye contact, and interaction among the group. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 1000),
       ratio: "1280:720",
-      duration: 10,
-      outputFormat: "mp4",
+      duration: 30,
+      audio: true,
     });
 
     return Response.json({ id: task.id, status: "queued", progress: 0 });
