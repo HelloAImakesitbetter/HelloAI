@@ -18,6 +18,7 @@ export default function Home() {
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,6 +151,7 @@ export default function Home() {
       return;
     }
 
+    setIsCreatingVideo(true);
     setError("");
 
     try {
@@ -177,6 +179,8 @@ export default function Home() {
           ? requestError.message
           : "Failed to create video"
       );
+    } finally {
+      setIsCreatingVideo(false);
     }
   };
 
@@ -248,9 +252,10 @@ export default function Home() {
             <button
               type="button"
               onClick={createVideo}
-              className="mt-4 ml-3 bg-black text-white px-6 py-3 rounded"
+              disabled={isCreatingVideo}
+              className="mt-4 ml-3 bg-black text-white px-6 py-3 rounded disabled:opacity-50"
             >
-              Create MP4
+              {isCreatingVideo ? "Creating MP4..." : "Create MP4"}
             </button>
           )}
         </div>
