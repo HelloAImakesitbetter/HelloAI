@@ -1,20 +1,30 @@
-import OpenAI from "openai";
+import RunwayML from "@runwayml/sdk";
 
 export async function GET(req: Request) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.RUNWAYML_API_SECRET;
     const id = new URL(req.url).searchParams.get("id");
 
     if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not configured");
+      throw new Error("RUNWAYML_API_SECRET is not configured");
     }
 
     if (!id) {
       return Response.json({ error: "A video ID is required" }, { status: 400 });
     }
 
-    const openai = new OpenAI({ apiKey });
-    const content = await openai.videos.downloadContent(id);
+    const runway = new RunwayML({ apiKey });
+    const task = await runway.tasks.retrieve(id);
+
+    if (task.status !== "SUCCEEDED" || !task.output[0]) {
+      throw new Error("Runway video is not ready");
+    }
+
+    const content = await fetch(task.output[0]);
+
+    if (!content.ok) {
+      throw new Error("Runway video download failed");
+    }
 
     return new Response(await content.arrayBuffer(), {
       headers: {

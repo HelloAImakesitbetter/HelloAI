@@ -1,38 +1,54 @@
-import OpenAI from "openai";
+import RunwayML from "@runwayml/sdk";
+
+type SceneInput = {
+  imageUrl?: string;
+};
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.RUNWAYML_API_SECRET;
 
     if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not configured");
+      throw new Error("RUNWAYML_API_SECRET is not configured");
     }
 
-    const { businessName, script } = (await req.json()) as {
+    const { businessName, script, scenes } = (await req.json()) as {
       businessName?: string;
       script?: string;
+      scenes?: SceneInput[];
     };
 
     if (!script || typeof script !== "string") {
       return Response.json({ error: "A script is required" }, { status: 400 });
     }
 
-    const openai = new OpenAI({ apiKey });
-    const video = await openai.videos.create({
-      model: "sora-2",
-      seconds: "8",
-      size: "1280x720",
-      prompt: `Create a polished, realistic commercial video for ${businessName || "this business"}. Show exactly five distinct adult characters together in the scene: a diverse team of three staff members and two customers. Give each person a clearly different appearance, position, and natural action so all five remain visible and recognizable. Show continuous natural motion, camera movement, eye contact, and the group interacting with the setting. Do not show captions, subtitles, logos, or text on screen. Use this marketing script as creative direction:\n\n${script}`,
+    const promptImage = scenes?.[0]?.imageUrl;
+
+    if (!promptImage) {
+      return Response.json(
+        { error: "Generate scene images before creating an AI video" },
+        { status: 400 }
+      );
+    }
+
+    const runway = new RunwayML({ apiKey });
+    const task = await runway.imageToVideo.create({
+      model: "gen4.5",
+      promptImage,
+      promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. Animate the people and environment with natural movement, camera motion, eye contact, and interaction. Keep the characters' appearance consistent with the reference image. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 1000),
+      ratio: "1280:720",
+      duration: 10,
+      outputFormat: "mp4",
     });
 
-    return Response.json({ id: video.id, status: video.status, progress: video.progress });
+    return Response.json({ id: task.id, status: "queued", progress: 0 });
   } catch (error) {
     console.error("AI video generation failed:", error);
 
     return Response.json(
       {
         error:
-          error instanceof Error ? error.message : "Failed to generate AI video",
+          error instanceof Error ? error.message : "Failed to generate Runway video",
       },
       { status: 500 }
     );

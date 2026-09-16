@@ -74,7 +74,7 @@ export default function Home() {
   };
 
   const generateAiVideo = async () => {
-    if (!result) {
+    if (!result || scenes.length === 0) {
       return;
     }
 
@@ -86,7 +86,7 @@ export default function Home() {
       const response = await fetch("/api/ai-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessName, script: result }),
+        body: JSON.stringify({ businessName, script: result, scenes }),
       });
       const data = await response.json();
 
@@ -311,7 +311,7 @@ export default function Home() {
           <button
             type="button"
             onClick={generateAiVideo}
-            disabled={isGeneratingAiVideo}
+            disabled={isGeneratingAiVideo || scenes.length === 0}
             className="mt-4 ml-3 bg-black text-white px-6 py-3 rounded disabled:opacity-50"
           >
             {isGeneratingAiVideo ? "Creating Moving Video..." : "Generate AI Video"}
