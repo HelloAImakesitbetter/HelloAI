@@ -15,19 +15,20 @@ const localFfmpegPath = path.resolve(
   process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"
 );
 const characterVoices = ["alloy", "echo", "fable", "onyx", "nova"] as const;
-const speakerNames = ["Maya", "Jordan", "Priya", "Marcus", "Elena"];
 
 type DialogueLine = { speaker: string; text: string };
 
 function parseDialogue(script: string): DialogueLine[] {
-  const allowedSpeakers = new Set(speakerNames);
-
   return script
     .split(/\r?\n/)
-    .map((line) => line.match(/^\s*(Maya|Jordan|Priya|Marcus|Elena)\s*:\s*(.+)$/i))
+    .map((line) => line.match(/^\s*([^:]{1,40})\s*:\s*(.+)$/))
     .filter((match): match is RegExpMatchArray => Boolean(match))
     .map((match) => ({ speaker: match[1], text: match[2].trim() }))
-    .filter((line) => allowedSpeakers.has(line.speaker));
+    .filter(
+      (line) =>
+        !/^(narrator|voiceover|voice-over|speaker|scene|director)$/i.test(line.speaker) &&
+        line.text.length > 0
+    );
 }
 
 export async function POST(req: Request) {
@@ -63,10 +64,12 @@ export async function POST(req: Request) {
 
     const audioFiles = await Promise.all(
       dialogue.map(async (line, index) => {
-        const speakerIndex = speakerNames.indexOf(line.speaker);
+        const speakerIndex = dialogue.findIndex(
+          (candidate) => candidate.speaker === line.speaker
+        );
         const speech = await openai.audio.speech.create({
           model: "gpt-4o-mini-tts",
-          voice: characterVoices[speakerIndex >= 0 ? speakerIndex : index % characterVoices.length],
+          voice: characterVoices[(speakerIndex >= 0 ? speakerIndex : index) % characterVoices.length],
           input: line.text,
         });
         return {
