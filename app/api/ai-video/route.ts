@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     const tasks = await Promise.all(
       prompts.map((segment) =>
         runway.imageToVideo.create({
-          model: "seedance2_5",
+          model: "wan3",
           promptImage,
           promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. This is one part of a two-part, one-minute video. ${segment} Animate exactly five distinct adult characters visible in the reference image, keeping each person's appearance consistent. Show natural movement, camera motion, eye contact, and interaction among the group. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 15000),
           ratio: "1280:720",
