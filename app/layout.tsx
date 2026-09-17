@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Business Video AI",
-  description: "Create AI-powered business videos",
+  title: "HelloAI",
+  description: "Build, run, and grow with HelloAI",
 };
 
 export default function RootLayout({
