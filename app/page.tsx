@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "../lib/supabase";
 
 type Scene = {
   scene: number;
@@ -16,9 +14,6 @@ type ChatMessage = {
 };
 
 export default function Home() {
-  const router = useRouter();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [userEmail, setUserEmail] = useState("");
   const [result, setResult] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
   const [audioDataUrl, setAudioDataUrl] = useState("");
@@ -36,29 +31,6 @@ export default function Home() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatting, setIsChatting] = useState(false);
-
-  useEffect(() => {
-    if (!supabase) {
-      router.replace("/login");
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
-        router.replace("/login");
-      } else {
-        setUserEmail(data.session.user.email || "");
-        setIsCheckingAuth(false);
-      }
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) router.replace("/login");
-      else setUserEmail(session.user.email || "");
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, [router]);
 
   useEffect(() => {
     const savedProject = window.localStorage.getItem("helloai-project");
@@ -362,15 +334,6 @@ export default function Home() {
     }
   };
 
-  const signOut = async () => {
-    await supabase?.auth.signOut();
-    router.replace("/login");
-  };
-
-  if (isCheckingAuth) {
-    return <main className="auth-shell"><p className="auth-loading">Loading your workspace...</p></main>;
-  }
-
   const completedSteps = [
     Boolean(result),
     Boolean(audioUrl),
@@ -393,8 +356,8 @@ export default function Home() {
         </nav>
           <div className="sidebar-footer">
           <div className="user-avatar">A</div>
-          <div><strong>{userEmail || "Account"}</strong><span>Personal workspace</span></div>
-          <button className="more-icon" type="button" onClick={signOut} aria-label="Sign out">↪</button>
+          <div><strong>Adam</strong><span>Personal workspace</span></div>
+          <span className="more-icon">•••</span>
         </div>
       </aside>
 
