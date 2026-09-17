@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Scene = {
   scene: number;
   imagePrompt: string;
   imageUrl: string;
+};
+
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
 };
 
 export default function Home() {
@@ -23,6 +28,31 @@ export default function Home() {
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [error, setError] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isChatting, setIsChatting] = useState(false);
+
+  useEffect(() => {
+    const savedProject = window.localStorage.getItem("helloai-project");
+
+    if (savedProject) {
+      const project = JSON.parse(savedProject) as {
+        businessName?: string;
+        description?: string;
+        chatMessages?: ChatMessage[];
+      };
+      setBusinessName(project.businessName || "");
+      setDescription(project.description || "");
+      setChatMessages(project.chatMessages || []);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      "helloai-project",
+      JSON.stringify({ businessName, description, chatMessages })
+    );
+  }, [businessName, description, chatMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +295,45 @@ export default function Home() {
     }
   };
 
+  const sendChatMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const content = chatInput.trim();
+
+    if (!content || isChatting) {
+      return;
+    }
+
+    const nextMessages = [...chatMessages, { role: "user" as const, content }];
+    setChatMessages(nextMessages);
+    setChatInput("");
+    setIsChatting(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages,
+          businessName,
+          description,
+          progress: `${result ? "script" : "brief"}${audioUrl ? ", voice" : ""}${scenes.length === 3 ? ", scenes" : ""}${aiVideoUrl || videoUrl ? ", video" : ""}`,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to answer");
+      }
+
+      setChatMessages([...nextMessages, { role: "assistant", content: data.reply }]);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to answer");
+    } finally {
+      setIsChatting(false);
+    }
+  };
+
   const completedSteps = [
     Boolean(result),
     Boolean(audioUrl),
@@ -335,6 +404,14 @@ export default function Home() {
 
           <aside className="activity-column">
             <div className="activity-card"><div className="section-heading"><div><span className="eyebrow">PROJECT PULSE</span><h2>Build plan</h2></div><span className="progress-number">{completedSteps}/4</span></div><div className="plan-list"><div className={result ? "plan-step done" : "plan-step current"}><span>01</span><div><strong>Shape the idea</strong><small>{result ? "Script generated" : "Waiting for your brief"}</small></div><b>{result ? "✓" : "·"}</b></div><div className={audioUrl ? "plan-step done" : "plan-step"}><span>02</span><div><strong>Give it a voice</strong><small>{audioUrl ? "Voiceover ready" : "Generate narration"}</small></div><b>{audioUrl ? "✓" : "·"}</b></div><div className={scenes.length === 3 ? "plan-step done" : "plan-step"}><span>03</span><div><strong>Set the scene</strong><small>{scenes.length === 3 ? "Three scenes ready" : "Create visual direction"}</small></div><b>{scenes.length === 3 ? "✓" : "·"}</b></div><div className={aiVideoUrl || videoUrl ? "plan-step done" : "plan-step"}><span>04</span><div><strong>Make it move</strong><small>{aiVideoUrl || videoUrl ? "Final MP4 ready" : "Render the video"}</small></div><b>{aiVideoUrl || videoUrl ? "✓" : "·"}</b></div></div></div>
+            <div className="chat-card">
+              <div className="section-heading"><div><span className="eyebrow">PROJECT ASSISTANT</span><h2>Ask HelloAI</h2></div><span className="chat-spark">✦</span></div>
+              <div className="chat-thread">
+                {chatMessages.length === 0 ? <p className="chat-empty">Ask for ideas, a stronger hook, or the next step in this project.</p> : chatMessages.map((message, index) => <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "✦" : "You"}</span><p>{message.content}</p></div>)}
+                {isChatting && <div className="chat-message assistant"><span>✦</span><p className="typing-indicator">Thinking...</p></div>}
+              </div>
+              <form className="chat-form" onSubmit={sendChatMessage}><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask your assistant..." aria-label="Ask HelloAI" /><button type="submit" disabled={isChatting || !chatInput.trim()} aria-label="Send message">↑</button></form>
+            </div>
             <div className="tip-card"><span className="tip-symbol">↗</span><div><strong>Good to know</strong><p>Specific details create stronger scripts, scenes, and characters.</p></div></div>
           </aside>
         </div>
