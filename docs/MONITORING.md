@@ -2,7 +2,7 @@
 
 The read-only monitor is available at `/api/monitor` and checks whether the required server-side configuration exists.
 
-Vercel calls it every five minutes through `vercel.json`.
+Vercel calls it daily through `vercel.json`, which is compatible with the Hobby plan.
 
 Add this Vercel environment variable to protect the endpoint:
 
