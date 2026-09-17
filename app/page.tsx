@@ -363,7 +363,7 @@ export default function Home() {
 
       <section className="workspace-main">
         <header className="workspace-header">
-          <div><span className="eyebrow">CREATE / VIDEO PROJECT</span><h1>Make something people remember.</h1></div>
+          <div><span className="eyebrow">ALL YOUR AI NEEDS</span><h1>Make something people remember.</h1></div>
           <div className="header-actions"><span className="status-dot">● All systems ready</span><button className="icon-button" type="button" aria-label="More options">•••</button></div>
         </header>
 
