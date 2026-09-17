@@ -265,142 +265,80 @@ export default function Home() {
     }
   };
 
+  const completedSteps = [
+    Boolean(result),
+    Boolean(audioUrl),
+    scenes.length === 3,
+    Boolean(aiVideoUrl || videoUrl),
+  ].filter(Boolean).length;
+
   return (
-    <main className="p-10 max-w-3xl mx-auto">
-      <h1 className="text-4xl font-bold mb-4">
-        Business Video AI
-      </h1>
-
-      <p className="mb-6">
-        Enter your business details and generate a marketing video.
-      </p>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          placeholder="Business Name"
-          className="w-full border p-3 rounded"
-          value={businessName}
-          onChange={(e) => setBusinessName(e.target.value)}
-        />
-
-        <textarea
-          placeholder="Describe your business..."
-          className="w-full border p-3 rounded h-32"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        <button
-          type="submit"
-          className="bg-black text-white px-6 py-3 rounded"
-          disabled={isLoading}
-        >
-          {isLoading ? "Generating..." : "Generate Video"}
+    <main className="workspace-shell">
+      <aside className="workspace-sidebar">
+        <div className="brand-mark"><span>H</span><strong>HelloAI</strong></div>
+        <button className="new-project" type="button" onClick={() => window.location.reload()}>
+          <span>+</span> New project
         </button>
-      </form>
-
-      {error && <p className="mt-4 text-red-600">{error}</p>}
-
-      {result && (
-        <div className="mt-8 border p-4 rounded">
-          <h2 className="font-bold mb-2">Generated Script</h2>
-          <pre>{result}</pre>
-          <button
-            type="button"
-            onClick={generateVoice}
-            className="mt-4 bg-black text-white px-6 py-3 rounded"
-          >
-            Generate Voiceover
-          </button>
-
-          <button
-            type="button"
-            onClick={generateAiVideo}
-            disabled={isGeneratingAiVideo || scenes.length === 0}
-            className="mt-4 ml-3 bg-black text-white px-6 py-3 rounded disabled:opacity-50"
-          >
-            {isGeneratingAiVideo ? "Creating Moving Video..." : "Generate AI Video"}
-          </button>
-
-          {aiVideoStatus && <p className="mt-4">{aiVideoStatus}</p>}
-
-          {audioUrl && (
-            <audio controls className="mt-4 w-full">
-              <source src={audioUrl} type="audio/mpeg" />
-            </audio>
-          )}
-
-          <button
-            type="button"
-            onClick={generateScenes}
-            disabled={isGeneratingScenes}
-            className="mt-4 bg-black text-white px-6 py-3 rounded disabled:opacity-50"
-          >
-            {isGeneratingScenes ? "Creating Scenes..." : "Generate Scene Images"}
-          </button>
-
-          {scenes.length === 3 && audioDataUrl && (
-            <button
-              type="button"
-              onClick={createVideo}
-              disabled={isCreatingVideo}
-              className="mt-4 ml-3 bg-black text-white px-6 py-3 rounded disabled:opacity-50"
-            >
-              {isCreatingVideo ? "Creating MP4..." : "Create MP4"}
-            </button>
-          )}
+        <p className="sidebar-label">Workspace</p>
+        <nav className="sidebar-nav" aria-label="Workspace navigation">
+          <button className="nav-item active" type="button"><span>✦</span> Create</button>
+          <button className="nav-item" type="button"><span>◫</span> Projects</button>
+          <button className="nav-item" type="button"><span>◌</span> Assets</button>
+        </nav>
+        <div className="sidebar-footer">
+          <div className="user-avatar">A</div>
+          <div><strong>Adam</strong><span>Personal workspace</span></div>
+          <span className="more-icon">•••</span>
         </div>
-      )}
+      </aside>
 
-      {scenes.length > 0 && (
-        <section className="mt-8">
-          <h2 className="font-bold mb-4">Video Scenes</h2>
-          <div className="grid gap-6 md:grid-cols-3">
-            {scenes.map((scene) => (
-              <article key={scene.scene} className="border rounded overflow-hidden">
-                <img
-                  src={scene.imageUrl}
-                  alt={`Scene ${scene.scene}`}
-                  className="aspect-square w-full object-cover"
-                />
-                <div className="p-4">
-                  <h3 className="font-bold">Scene {scene.scene}</h3>
-                  <p className="mt-2 text-sm">{scene.imagePrompt}</p>
+      <section className="workspace-main">
+        <header className="workspace-header">
+          <div><span className="eyebrow">CREATE / VIDEO PROJECT</span><h1>Make something people remember.</h1></div>
+          <div className="header-actions"><span className="status-dot">● All systems ready</span><button className="icon-button" type="button" aria-label="More options">•••</button></div>
+        </header>
+
+        <div className="workspace-grid">
+          <section className="creation-column">
+            <div className="brief-card">
+              <div className="card-kicker"><span className="kicker-icon">✦</span> Project brief</div>
+              <p className="card-intro">Tell the assistant what you want to make. It will turn the idea into a script, scenes, voice, and video.</p>
+              <form onSubmit={handleSubmit} className="brief-form">
+                <label>Business or project name<input type="text" placeholder="e.g. HellowClean" value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></label>
+                <label>What should we create?<textarea placeholder="Describe the business, audience, offer, and feeling you want the video to have..." value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+                <div className="form-footer"><span className="field-hint">{description.length}/500 characters</span><button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Thinking..." : "Build the plan  →"}</button></div>
+              </form>
+            </div>
+
+            {error && <div className="error-banner">{error}</div>}
+
+            {result ? (
+              <section className="assistant-card">
+                <div className="assistant-heading"><div className="assistant-avatar">✦</div><div><span className="eyebrow">HELLOAI / ASSISTANT</span><h2>Your first draft is ready</h2></div><span className="draft-pill">Draft 01</span></div>
+                <pre className="script-preview">{result}</pre>
+                <div className="tool-row">
+                  <button type="button" onClick={generateVoice} className="secondary-button" disabled={Boolean(audioUrl)}>◉ {audioUrl ? "Voice ready" : "Generate voice"}</button>
+                  <button type="button" onClick={generateScenes} disabled={isGeneratingScenes} className="secondary-button">▧ {isGeneratingScenes ? "Creating scenes..." : "Create scenes"}</button>
+                  <button type="button" onClick={generateAiVideo} disabled={isGeneratingAiVideo || scenes.length === 0} className="primary-button small">{isGeneratingAiVideo ? "Rendering..." : "Generate moving video  →"}</button>
                 </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+                {audioUrl && <audio controls className="audio-player"><source src={audioUrl} type="audio/mpeg" /></audio>}
+                {aiVideoStatus && <div className="progress-note">{aiVideoStatus}</div>}
+              </section>
+            ) : (
+              <div className="empty-state"><div className="empty-orbit">✦</div><h2>Your project will take shape here.</h2><p>Start with a simple brief and HelloAI will map the work into useful next steps.</p></div>
+            )}
 
-      {videoUrl && (
-        <section className="mt-8 border p-4 rounded">
-          <h2 className="font-bold mb-4">Finished Video</h2>
-          <video controls src={videoUrl} className="w-full" />
-          <a
-            href={videoUrl}
-            download="business-video.mp4"
-            className="mt-4 inline-block bg-black text-white px-6 py-3 rounded"
-          >
-            Download MP4
-          </a>
-        </section>
-      )}
+            {scenes.length > 0 && <section className="scenes-section"><div className="section-heading"><div><span className="eyebrow">VISUAL DIRECTION</span><h2>Scene board</h2></div><span className="count-pill">{scenes.length} scenes</span></div><div className="scene-grid">{scenes.map((scene) => <article key={scene.scene} className="scene-card"><img src={scene.imageUrl} alt={`Scene ${scene.scene}`} /><div className="scene-copy"><span>0{scene.scene}</span><h3>Scene {scene.scene}</h3><p>{scene.imagePrompt}</p></div></article>)}</div></section>}
 
-      {aiVideoUrl && (
-        <section className="mt-8 border p-4 rounded">
-          <h2 className="font-bold mb-4">AI Video</h2>
-          <video controls src={aiVideoUrl} className="w-full" />
-          <a
-            href={aiVideoUrl}
-            download="ai-business-video.mp4"
-            className="mt-4 inline-block bg-black text-white px-6 py-3 rounded"
-          >
-            Download AI Video
-          </a>
-        </section>
-      )}
+            {(videoUrl || aiVideoUrl) && <section className="finished-card"><div className="section-heading"><div><span className="eyebrow">DELIVERABLE</span><h2>Ready to share</h2></div><span className="ready-pill">● Ready</span></div><video controls src={aiVideoUrl || videoUrl} /><a href={aiVideoUrl || videoUrl} download={aiVideoUrl ? "ai-business-video.mp4" : "business-video.mp4"} className="primary-button download-button">Download final MP4  ↓</a></section>}
+          </section>
+
+          <aside className="activity-column">
+            <div className="activity-card"><div className="section-heading"><div><span className="eyebrow">PROJECT PULSE</span><h2>Build plan</h2></div><span className="progress-number">{completedSteps}/4</span></div><div className="plan-list"><div className={result ? "plan-step done" : "plan-step current"}><span>01</span><div><strong>Shape the idea</strong><small>{result ? "Script generated" : "Waiting for your brief"}</small></div><b>{result ? "✓" : "·"}</b></div><div className={audioUrl ? "plan-step done" : "plan-step"}><span>02</span><div><strong>Give it a voice</strong><small>{audioUrl ? "Voiceover ready" : "Generate narration"}</small></div><b>{audioUrl ? "✓" : "·"}</b></div><div className={scenes.length === 3 ? "plan-step done" : "plan-step"}><span>03</span><div><strong>Set the scene</strong><small>{scenes.length === 3 ? "Three scenes ready" : "Create visual direction"}</small></div><b>{scenes.length === 3 ? "✓" : "·"}</b></div><div className={aiVideoUrl || videoUrl ? "plan-step done" : "plan-step"}><span>04</span><div><strong>Make it move</strong><small>{aiVideoUrl || videoUrl ? "Final MP4 ready" : "Render the video"}</small></div><b>{aiVideoUrl || videoUrl ? "✓" : "·"}</b></div></div></div>
+            <div className="tip-card"><span className="tip-symbol">↗</span><div><strong>Good to know</strong><p>Specific details create stronger scripts, scenes, and characters.</p></div></div>
+          </aside>
+        </div>
+      </section>
     </main>
   );
 }
