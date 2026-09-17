@@ -62,7 +62,7 @@ export async function POST(req: Request) {
           model: "wan3",
           promptImage,
           promptText: `Create a polished, realistic commercial video for ${businessName || "this business"}. This is section ${index + 1} of ${clipCount} in a ${requestedDuration}-second video. ${segment} Animate exactly five distinct adult characters visible in the reference image, keeping each person's appearance consistent. Show natural movement, camera motion, eye contact, and interaction among the group. Do not show captions, subtitles, logos, or text on screen. Creative direction:\n\n${script}`.slice(0, 15000),
-          ratio: "1280:720",
+          ratio: "auto_720p",
           duration: Math.min(clipDuration, requestedDuration - index * clipDuration),
           audio: false,
         })
