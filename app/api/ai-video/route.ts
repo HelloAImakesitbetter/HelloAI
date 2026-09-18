@@ -1,102 +1,36 @@
-type DialogueLine = { speaker: string; text: string };
-type CharacterConfig = { name: string; avatarId: string; voiceId?: string };
+import RunwayML from "@runwayml/sdk";
 
-function parseDialogue(script: string): DialogueLine[] {
-  return script.split(/\r?\n/).map((line) => line.match(/^\s*([^:]{1,40})\s*:\s*(.+)$/)).filter((match): match is RegExpMatchArray => Boolean(match)).map((match) => ({ speaker: match[1].trim(), text: match[2].trim() })).filter((line) => !/^(narrator|voiceover|scene|director|avatar id|voice id|character name|speaker)$/i.test(line.speaker));
-}
+type SceneInput = { imageUrl?: string };
 
-function characterConfig(speaker: string, selected: CharacterConfig[]) {
-  const selectedCharacter = selected.find((character) => character.name.toLowerCase() === speaker.toLowerCase());
-  if (selectedCharacter) return selectedCharacter;
-  const key = speaker.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
-  const avatarId = process.env[`HEYGEN_${key}_AVATAR_ID`];
-  const voiceId = process.env[`HEYGEN_${key}_VOICE_ID`];
-  return avatarId ? { name: speaker, avatarId, ...(voiceId ? { voiceId } : {}) } : null;
-}
-
-function activityPrompt(text: string) {
-  const lower = text.toLowerCase();
-  if (/clean|wipe|vacuum|mop|scrub|wash|polish/.test(lower)) return "actively clean the space with realistic wiping, vacuuming, mopping, and checking surfaces";
-  if (/drive|driving|car|van|deliver|delivery/.test(lower)) return "realistically drive or prepare a vehicle for delivery, with natural hand and eye movement";
-  if (/cook|kitchen|food|serve|restaurant|coffee/.test(lower)) return "work naturally in the kitchen or service setting, preparing and presenting the product";
-  if (/build|repair|install|tool|construct/.test(lower)) return "perform the practical work with appropriate tools and careful hand movements";
-  if (/teach|train|class|lesson/.test(lower)) return "teach and demonstrate the subject with natural gestures and attention to the learner";
-  return "perform natural work-related actions in the business setting while interacting with the environment";
-}
-
-async function loadHeyGenCatalog(apiKey: string) {
-  const headers = { "X-Api-Key": apiKey };
-    const [avatarsResponse, voicesResponse] = await Promise.all([
-      fetch("https://api.heygen.com/v3/avatars/looks?avatar_type=photo_avatar&ownership=public&limit=50", { headers }),
-    fetch("https://api.heygen.com/v3/voices?limit=100", { headers }),
-  ]);
-  const avatarsData = await avatarsResponse.json();
-  const voicesData = await voicesResponse.json();
-
-  if (!avatarsResponse.ok || !voicesResponse.ok) {
-    throw new Error("HeyGen could not load the automatic photo-avatar and voice catalog");
-  }
-
-  return {
-    avatars: (avatarsData?.data?.avatars || avatarsData?.data || []).map((item: { id?: string; default_voice_id?: string; supported_api_engines?: string[] }) => ({ ...item, id: item.id, default_voice_id: item.default_voice_id })).filter((item: { id?: string; supported_api_engines?: string[] }) => item.id && item.supported_api_engines?.includes("avatar_iv")),
-    voices: (voicesData?.data?.voices || voicesData?.data || []).map((item: { id?: string; voice_id?: string }) => ({ ...item, id: item.id || item.voice_id })).filter((item: { id?: string }) => item.id),
-  };
+function durationFromBrief(text: string) {
+  const match = text.match(/(\d+)\s*(seconds?|secs?|minutes?|mins?)/i);
+  if (!match) return 10;
+  const value = Number(match[1]) * (/minutes?|mins?/i.test(match[2]) ? 60 : 1);
+  return Math.min(Math.max(value, 5), 10);
 }
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.HEYGEN_API_KEY;
-    const { businessName, script, description, characters } = (await req.json()) as { businessName?: string; script?: string; description?: string; characters?: CharacterConfig[] };
-
-    if (!apiKey) throw new Error("HEYGEN_API_KEY is not configured");
+    const apiKey = process.env.RUNWAYML_API_SECRET;
+    const { businessName, description, script, scenes } = (await req.json()) as { businessName?: string; description?: string; script?: string; scenes?: SceneInput[] };
+    if (!apiKey) throw new Error("RUNWAYML_API_SECRET is not configured");
     if (!script || typeof script !== "string") return Response.json({ error: "A script is required" }, { status: 400 });
 
-    const dialogue = parseDialogue(script);
-    const speakers = [...new Set(dialogue.map((line) => line.speaker))].slice(0, 10);
-    const catalog = await loadHeyGenCatalog(apiKey);
-    if (catalog.avatars.length === 0 || catalog.voices.length === 0) {
-      throw new Error("HeyGen returned no usable photo avatars or voices for automatic video generation");
-    }
-    const segments = speakers.map((speaker, index) => ({
-      speaker,
-      text: dialogue.filter((line) => line.speaker === speaker).map((line) => line.text).join(" "),
-      config: characterConfig(speaker, characters || []) || {
-        name: speaker,
-        avatarId: catalog.avatars[index % catalog.avatars.length].id as string,
-        voiceId: (catalog.avatars[index % catalog.avatars.length].default_voice_id || catalog.voices[index % catalog.voices.length].id) as string,
-      },
-    }));
-    const missing = segments.filter((segment) => !segment.config).map((segment) => segment.speaker);
+    const promptImage = scenes?.[0]?.imageUrl;
+    if (!promptImage) return Response.json({ error: "Create scenes before generating the cinematic video" }, { status: 400 });
 
-    if (missing.length > 0) {
-      const key = missing[0].toUpperCase().replace(/[^A-Z0-9]+/g, "_");
-      return Response.json({ error: `Missing HeyGen avatar mapping for ${missing.join(", ")}. Add HEYGEN_${key}_AVATAR_ID and matching voice ID.` }, { status: 400 });
-    }
+    const client = new RunwayML({ apiKey });
+    const task = await client.imageToVideo.create({
+      model: "gen4_turbo",
+      promptImage,
+      promptText: `Create a realistic cinematic commercial for ${businessName || "this business"}. Show cleaners physically working inside the property: walking between rooms, vacuuming, wiping surfaces, lifting supplies, checking finished areas, and interacting naturally with the location. Use realistic camera movement and natural body motion. Do not make people stand still as presenters. Do not show text, subtitles, logos, or spoken dialogue. Story direction: ${description || script}`.slice(0, 1000),
+      ratio: "1280:720",
+      duration: durationFromBrief(description || script),
+    });
 
-    const ids = await Promise.all(segments.map(async ({ speaker, text, config }) => {
-      const response = await fetch("https://api.heygen.com/v3/videos", {
-        method: "POST",
-        headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "avatar",
-          avatar_id: config!.avatarId,
-          ...(config!.voiceId ? { voice_id: config!.voiceId } : {}),
-          script: text,
-          title: `${businessName || "HelloAI"} - ${speaker}`,
-          resolution: "720p",
-          aspect_ratio: "16:9",
-          motion_prompt: `${activityPrompt(`${description || ""} ${text}`)} in the real-world setting for ${businessName || "the business"}. Show natural eye contact, realistic conversational expressions, purposeful body movement, and interaction with the location. Do not stand still like a presenter.`,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message || `${speaker} video request failed`);
-      if (!data?.data?.video_id) throw new Error(`HeyGen did not return a video ID for ${speaker}`);
-      return data.data.video_id as string;
-    }));
-
-    return Response.json({ ids, duration: description || "", status: "queued", progress: 0 });
+    return Response.json({ ids: [task.id], status: "queued", progress: 0 });
   } catch (error) {
-    console.error("HeyGen video generation failed:", error);
-    return Response.json({ error: error instanceof Error ? error.message : "Failed to generate HeyGen video" }, { status: 500 });
+    console.error("Runway cinematic generation failed:", error);
+    return Response.json({ error: error instanceof Error ? error.message : "Failed to generate cinematic video" }, { status: 500 });
   }
 }
