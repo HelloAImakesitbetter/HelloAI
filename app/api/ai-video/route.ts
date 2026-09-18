@@ -28,7 +28,7 @@ async function loadHeyGenCatalog(apiKey: string) {
   }
 
   return {
-    avatars: (avatarsData?.data?.avatars || avatarsData?.data || []).map((item: { id?: string; avatar_id?: string }) => ({ ...item, id: item.id || item.avatar_id })).filter((item: { id?: string }) => item.id),
+    avatars: (avatarsData?.data?.avatars || avatarsData?.data || []).map((item: { id?: string; avatar_id?: string; supported_api_engines?: string[] }) => ({ ...item, id: item.id || item.avatar_id })).filter((item: { id?: string; supported_api_engines?: string[] }) => item.id && (!item.supported_api_engines || item.supported_api_engines.includes("avatar_iv"))),
     voices: (voicesData?.data?.voices || voicesData?.data || []).map((item: { id?: string; voice_id?: string }) => ({ ...item, id: item.id || item.voice_id })).filter((item: { id?: string }) => item.id),
   };
 }
