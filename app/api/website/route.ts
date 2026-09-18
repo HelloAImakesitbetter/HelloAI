@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 
-type WebsiteDraft = {
+type WebsitePage = {
+  slug: string;
+  label: string;
   title: string;
   tagline: string;
   intro: string;
@@ -11,24 +13,22 @@ type WebsiteDraft = {
   closing: string;
 };
 
+type WebsiteDraft = { pages: WebsitePage[] };
+
 function parseDraft(output: string): WebsiteDraft {
   const start = output.indexOf("{");
   const end = output.lastIndexOf("}");
-
-  if (start === -1 || end < start) {
-    throw new Error("The AI returned an invalid website draft");
-  }
+  if (start === -1 || end < start) throw new Error("The AI returned an invalid website draft");
 
   const draft = JSON.parse(output.slice(start, end + 1)) as WebsiteDraft;
+  if (!Array.isArray(draft.pages) || draft.pages.length !== 4) {
+    throw new Error("The AI returned an incomplete site map");
+  }
 
-  if (
-    !draft.title ||
-    !draft.tagline ||
-    !draft.intro ||
-    !Array.isArray(draft.benefits) ||
-    !Array.isArray(draft.steps)
-  ) {
-    throw new Error("The AI returned incomplete website content");
+  for (const page of draft.pages) {
+    if (!page.slug || !page.label || !page.title || !page.tagline || !page.intro || !Array.isArray(page.benefits) || !Array.isArray(page.steps)) {
+      throw new Error("The AI returned incomplete page content");
+    }
   }
 
   return draft;
@@ -37,15 +37,9 @@ function parseDraft(output: string): WebsiteDraft {
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-    const { businessName, description } = (await req.json()) as {
-      businessName?: string;
-      description?: string;
-    };
+    const { businessName, description } = (await req.json()) as { businessName?: string; description?: string };
 
-    if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not configured");
-    }
-
+    if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
     if (!description || typeof description !== "string") {
       return Response.json({ error: "A website brief is required" }, { status: 400 });
     }
@@ -53,24 +47,20 @@ export async function POST(req: Request) {
     const openai = new OpenAI({ apiKey });
     const response = await openai.responses.create({
       model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
-      input: `Create a polished small-business landing page draft for ${businessName || "this business"}.
+      input: `Create a polished four-page small-business website draft for ${businessName || "this business"}.
 
 Business brief:
 ${description}
 
 Return only valid JSON with this exact shape:
-{"title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""}
+{"pages":[{"slug":"home","label":"Home","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""},{"slug":"services","label":"Services","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""},{"slug":"about","label":"About","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""},{"slug":"contact","label":"Contact","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""}]}
 
-Write clear customer-facing copy. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
+Write clear customer-facing copy. Keep the four pages distinct. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
     });
 
     return Response.json({ draft: parseDraft(response.output_text) });
   } catch (error) {
     console.error("Website generation failed:", error);
-
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Failed to build website" },
-      { status: 500 }
-    );
+    return Response.json({ error: error instanceof Error ? error.message : "Failed to build website" }, { status: 500 });
   }
 }
