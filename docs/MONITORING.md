@@ -14,6 +14,7 @@ The monitor currently checks:
 
 - `OPENAI_API_KEY`
 - `RUNWAYML_API_SECRET`
+- `HEYGEN_API_KEY`
 - `HELLOAI_API_KEY`
 
 A `200` response means the configuration is present. A `503` response means the deployment is degraded. This monitor does not generate videos, spend provider credits, edit code, or deploy changes.

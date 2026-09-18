@@ -128,10 +128,11 @@ export default function Home() {
         throw new Error("The video service did not return any jobs");
       }
 
+      const provider = data.provider || "runway";
       for (let attempt = 0; attempt < 90; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
         const statusResponse = await fetch(
-          `/api/ai-video/status?ids=${encodeURIComponent(data.ids.join(","))}`
+          `/api/ai-video/status?provider=${encodeURIComponent(provider)}&ids=${encodeURIComponent(data.ids.join(","))}`
         );
         const statusData = await statusResponse.json();
 
@@ -142,7 +143,9 @@ export default function Home() {
         setAiVideoStatus(
           statusData.status === "completed"
             ? "Video ready"
-            : `Creating moving video... ${statusData.progress || 0}%`
+            : provider === "heygen"
+              ? "Animating characters and recording voices..."
+              : `Creating moving video... ${statusData.progress || 0}%`
         );
 
         if (statusData.status === "failed") {
@@ -153,7 +156,7 @@ export default function Home() {
           const downloadResponse = await fetch("/api/ai-video/download", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: data.ids, script: result }),
+            body: JSON.stringify({ ids: data.ids, script: result, provider }),
           });
 
           if (!downloadResponse.ok) {
@@ -161,7 +164,9 @@ export default function Home() {
             throw new Error(downloadData?.error || "Failed to download AI video");
           }
 
+          const warning = downloadResponse.headers.get("X-HelloAI-Warning");
           setAiVideoUrl(URL.createObjectURL(await downloadResponse.blob()));
+          setAiVideoStatus(warning || "Video ready");
           return;
         }
       }
@@ -259,80 +264,56 @@ export default function Home() {
   ].filter(Boolean).length;
 
   return (
-    <main className="workspace-shell">
-      <aside className="workspace-sidebar">
+    <main className="command-shell">
+      <aside className="command-sidebar">
         <div className="brand-mark"><span>H</span><strong>HelloAI</strong></div>
-        <button className="new-project" type="button" onClick={() => window.location.reload()}>
-          <span>+</span> New project
-        </button>
-        <p className="sidebar-label">Workspace</p>
+        <button className="new-project" type="button" onClick={() => window.location.reload()}><span>+</span> New workspace</button>
+        <p className="sidebar-label">Command center</p>
         <nav className="sidebar-nav" aria-label="Workspace navigation">
-          <button className="nav-item active" type="button"><span>✦</span> Create</button>
+          <button className="nav-item active" type="button"><span>⌂</span> Overview</button>
+          <a className="nav-item" href="#build"><span>✦</span> Build something</a>
           <a className="nav-item" href="/website"><span>▤</span> Website builder</a>
-          <a className="nav-item" href="/image"><span>▧</span> Photo editor</a>
+          <a className="nav-item" href="/image"><span>▧</span> Image studio</a>
           <a className="nav-item" href="/characters"><span>◉</span> Characters</a>
           <button className="nav-item" type="button"><span>◫</span> Projects</button>
           <button className="nav-item" type="button"><span>◌</span> Assets</button>
         </nav>
-          <div className="sidebar-footer">
-          <div className="user-avatar">A</div>
-          <div><strong>Adam</strong><span>Personal workspace</span></div>
-          <span className="more-icon">•••</span>
-        </div>
+        <div className="sidebar-footer"><div className="user-avatar">A</div><div><strong>Adam</strong><span>Personal workspace</span></div><span className="more-icon">•••</span></div>
       </aside>
 
-      <section className="workspace-main">
-        <header className="workspace-header">
-          <div><span className="eyebrow">ALL YOUR AI NEEDS</span><h1>Make something people remember.</h1></div>
-          <div className="header-actions"><span className="status-dot">● All systems ready</span><button className="icon-button" type="button" aria-label="More options">•••</button></div>
+      <section className="command-main">
+        <header className="command-header">
+          <div><span className="eyebrow">PERSONAL WORKSPACE / TODAY</span><h1>Good morning, Adam.</h1><p>Turn the next good idea into something your business can use.</p></div>
+          <div className="header-actions"><span className="status-dot">● Systems ready</span><button className="icon-button" type="button" aria-label="More options">•••</button></div>
         </header>
 
-        <div className="workspace-grid">
-          <section className="creation-column">
-            <div className="brief-card">
-              <div className="card-kicker"><span className="kicker-icon">✦</span> Project brief</div>
-              <p className="card-intro">Tell the assistant what you want to make. It will turn the idea into a script, scenes, voice, and video.</p>
-              <form onSubmit={handleSubmit} className="brief-form">
-                <label>Business or project name<input type="text" placeholder="e.g. HellowClean" value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></label>
-                <label>What should we create?<textarea placeholder="Describe the business, audience, offer, and feeling you want the video to have..." value={description} onChange={(e) => setDescription(e.target.value)} /></label>
-                <div className="form-footer"><span className="field-hint">{description.length}/500 characters</span><button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Thinking..." : "Build the plan  →"}</button></div>
-              </form>
-            </div>
+        <section className="command-stats" aria-label="Workspace summary">
+          <div><span className="stat-label">Active project</span><strong>{businessName || "Your next business idea"}</strong><small>{result ? "Draft in progress" : "Waiting for a brief"}</small></div>
+          <div><span className="stat-label">Assets created</span><strong>{(result ? 1 : 0) + scenes.length + (aiVideoUrl || videoUrl ? 1 : 0)}</strong><small>Across this workspace</small></div>
+          <div><span className="stat-label">Project progress</span><strong>{completedSteps}/3</strong><small>{completedSteps === 3 ? "Ready to share" : "Keep building"}</small></div>
+        </section>
 
+        <section className="command-grid" id="build">
+          <div className="command-primary">
+            <div className="command-intro"><div><span className="eyebrow">BUILD WITH HELLOAI</span><h2>What are we making?</h2><p>Describe a business goal and HelloAI will turn it into a plan, content, and a finished deliverable.</p></div><span className="intro-mark">✦</span></div>
+            <form onSubmit={handleSubmit} className="command-form">
+              <label>Business or project name<input type="text" placeholder="e.g. HellowClean" value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></label>
+              <label>Your goal<textarea placeholder="Launch a local cleaning service with a warm video, a simple website, and a clear offer..." value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+              <div className="form-footer"><span className="field-hint">{description.length}/500 characters</span><button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building..." : "Build the plan  →"}</button></div>
+            </form>
             {error && <div className="error-banner">{error}</div>}
-
-            {result ? (
-              <section className="assistant-card">
-                <div className="assistant-heading"><div className="assistant-avatar">✦</div><div><span className="eyebrow">HELLOAI / ASSISTANT</span><h2>Your first draft is ready</h2></div><span className="draft-pill">Draft 01</span></div>
-                <pre className="script-preview">{result}</pre>
-                <div className="tool-row">
-                  <button type="button" onClick={generateScenes} disabled={isGeneratingScenes} className="secondary-button">▧ {isGeneratingScenes ? "Creating scenes..." : "Create scenes"}</button>
-                  <button type="button" onClick={generateAiVideo} disabled={isGeneratingAiVideo} className="primary-button small">{isGeneratingAiVideo ? "Rendering..." : "Generate automated video  →"}</button>
-                </div>
-                {aiVideoStatus && <div className="progress-note">{aiVideoStatus}</div>}
-              </section>
-            ) : (
-              <div className="empty-state"><div className="empty-orbit">✦</div><h2>Your project will take shape here.</h2><p>Start with a simple brief and HelloAI will map the work into useful next steps.</p></div>
-            )}
-
-            {scenes.length > 0 && <section className="scenes-section"><div className="section-heading"><div><span className="eyebrow">VISUAL DIRECTION</span><h2>Scene board</h2></div><span className="count-pill">{scenes.length} scenes</span></div><div className="scene-grid">{scenes.map((scene) => <article key={scene.scene} className="scene-card"><img src={scene.imageUrl} alt={`Scene ${scene.scene}`} /><div className="scene-copy"><span>0{scene.scene}</span><h3>Scene {scene.scene}</h3><p>{scene.imagePrompt}</p></div></article>)}</div></section>}
-
-            {(videoUrl || aiVideoUrl) && <section className="finished-card"><div className="section-heading"><div><span className="eyebrow">DELIVERABLE</span><h2>Ready to share</h2></div><span className="ready-pill">● Ready</span></div><video controls src={aiVideoUrl || videoUrl} /><a href={aiVideoUrl || videoUrl} download={aiVideoUrl ? "ai-business-video.mp4" : "business-video.mp4"} className="primary-button download-button">Download final MP4  ↓</a></section>}
-          </section>
-
-          <aside className="activity-column">
-            <div className="activity-card"><div className="section-heading"><div><span className="eyebrow">PROJECT PULSE</span><h2>Build plan</h2></div><span className="progress-number">{completedSteps}/3</span></div><div className="plan-list"><div className={result ? "plan-step done" : "plan-step current"}><span>01</span><div><strong>Shape the idea</strong><small>{result ? "Script generated" : "Waiting for your brief"}</small></div><b>{result ? "✓" : "·"}</b></div><div className={scenes.length === 3 ? "plan-step done" : "plan-step"}><span>02</span><div><strong>Set the scene</strong><small>{scenes.length === 3 ? "Three scenes ready" : "Create visual direction"}</small></div><b>{scenes.length === 3 ? "✓" : "·"}</b></div><div className={aiVideoUrl || videoUrl ? "plan-step done" : "plan-step"}><span>03</span><div><strong>Make it talk</strong><small>{aiVideoUrl || videoUrl ? "Lip-synced MP4 ready" : "Render with HeyGen"}</small></div><b>{aiVideoUrl || videoUrl ? "✓" : "·"}</b></div></div></div>
-            <div className="chat-card">
-              <div className="section-heading"><div><span className="eyebrow">PROJECT ASSISTANT</span><h2>Ask HelloAI</h2></div><span className="chat-spark">✦</span></div>
-              <div className="chat-thread">
-                {chatMessages.length === 0 ? <p className="chat-empty">Ask for ideas, a stronger hook, or the next step in this project.</p> : chatMessages.map((message, index) => <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "✦" : "You"}</span><p>{message.content}</p></div>)}
-                {isChatting && <div className="chat-message assistant"><span>✦</span><p className="typing-indicator">Thinking...</p></div>}
-              </div>
-              <form className="chat-form" onSubmit={sendChatMessage}><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask your assistant..." aria-label="Ask HelloAI" /><button type="submit" disabled={isChatting || !chatInput.trim()} aria-label="Send message">↑</button></form>
-            </div>
-            <div className="tip-card"><span className="tip-symbol">↗</span><div><strong>Good to know</strong><p>Specific details create stronger scripts, scenes, and characters.</p></div></div>
+          </div>
+          <aside className="command-assistant">
+            <div className="assistant-topline"><div className="assistant-avatar">✦</div><div><span className="eyebrow">HELLOAI AGENT</span><h2>Ask for the next move</h2></div></div>
+            <div className="chat-thread">{chatMessages.length === 0 ? <p className="chat-empty">I can shape an idea, improve your offer, or help decide what to build next.</p> : chatMessages.map((message, index) => <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "✦" : "You"}</span><p>{message.content}</p></div>)}{isChatting && <div className="chat-message assistant"><span>✦</span><p className="typing-indicator">Thinking...</p></div>}</div>
+            <form className="chat-form" onSubmit={sendChatMessage}><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="Ask HelloAI..." aria-label="Ask HelloAI" /><button type="submit" disabled={isChatting || !chatInput.trim()} aria-label="Send message">↑</button></form>
           </aside>
-        </div>
+        </section>
+
+        {result ? <section className="project-board"><div className="board-heading"><div><span className="eyebrow">ACTIVE PROJECT</span><h2>{businessName || "Untitled project"}</h2></div><span className="draft-pill">In progress</span></div><div className="project-board-grid"><div><pre className="script-preview">{result}</pre><div className="tool-row"><button type="button" onClick={generateScenes} disabled={isGeneratingScenes} className="secondary-button">▧ {isGeneratingScenes ? "Creating scenes..." : "Create scenes"}</button><button type="button" onClick={generateAiVideo} disabled={isGeneratingAiVideo} className="primary-button small">{isGeneratingAiVideo ? "Rendering..." : "Make talking video  →"}</button></div>{aiVideoStatus && <div className="progress-note">{aiVideoStatus}</div>}</div><div className="project-steps"><div className={result ? "plan-step done" : "plan-step current"}><span>01</span><div><strong>Shape the idea</strong><small>Script generated</small></div><b>✓</b></div><div className={scenes.length === 3 ? "plan-step done" : "plan-step"}><span>02</span><div><strong>Set the scene</strong><small>{scenes.length === 3 ? "Three scenes ready" : "Create visual direction"}</small></div><b>{scenes.length === 3 ? "✓" : "·"}</b></div><div className={aiVideoUrl || videoUrl ? "plan-step done" : "plan-step"}><span>03</span><div><strong>Make it talk</strong><small>{aiVideoUrl || videoUrl ? "Lip-synced video ready" : "Render with HeyGen"}</small></div><b>{aiVideoUrl || videoUrl ? "✓" : "·"}</b></div></div></div></section> : <section className="next-actions"><div><span className="eyebrow">START HERE</span><h2>One brief can become a whole business kit.</h2><p>Begin with the idea above, then use the workspace to create the pieces around it.</p></div><div className="action-links"><a href="/website"><span>▤</span><strong>Build a website</strong><small>Turn the offer into a home online.</small></a><a href="/image"><span>▧</span><strong>Make campaign images</strong><small>Create visuals for your next launch.</small></a><a href="/characters"><span>◉</span><strong>Set up your cast</strong><small>Give your videos faces and voices.</small></a></div></section>}
+
+        {scenes.length > 0 && <section className="scenes-section"><div className="section-heading"><div><span className="eyebrow">VISUAL DIRECTION</span><h2>Scene board</h2></div><span className="count-pill">{scenes.length} scenes</span></div><div className="scene-grid">{scenes.map((scene) => <article key={scene.scene} className="scene-card"><img src={scene.imageUrl} alt={`Scene ${scene.scene}`} /><div className="scene-copy"><span>0{scene.scene}</span><h3>Scene {scene.scene}</h3><p>{scene.imagePrompt}</p></div></article>)}</div></section>}
+        {(videoUrl || aiVideoUrl) && <section className="finished-card"><div className="section-heading"><div><span className="eyebrow">DELIVERABLE</span><h2>Ready to share</h2></div><span className="ready-pill">● Ready</span></div><video controls src={aiVideoUrl || videoUrl} /><a href={aiVideoUrl || videoUrl} download={aiVideoUrl ? "ai-business-video.mp4" : "business-video.mp4"} className="primary-button download-button">Download final MP4  ↓</a></section>}
       </section>
     </main>
   );

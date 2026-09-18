@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!apiKey) {
-      throw new Error("ELEVENLABS_API_KEY is not configured");
+      throw new Error("This legacy voice endpoint is disabled. Configure HEYGEN_API_KEY and use automated video generation.");
     }
 
     const { script } = (await req.json()) as { script?: string };

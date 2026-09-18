@@ -1,6 +1,7 @@
 const requiredEnvironmentVariables = [
   "OPENAI_API_KEY",
   "RUNWAYML_API_SECRET",
+  "HEYGEN_API_KEY",
   "HELLOAI_API_KEY",
 ];
 
