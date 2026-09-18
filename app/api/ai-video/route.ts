@@ -67,7 +67,16 @@ export async function POST(req: Request) {
       const response = await fetch("https://api.heygen.com/v3/videos", {
         method: "POST",
         headers: { "X-Api-Key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "avatar", avatar_id: config!.avatarId, ...(config!.voiceId ? { voice_id: config!.voiceId } : {}), script: `Speak naturally as ${speaker}. Use clear facial expressions, eye contact, and accurate lip synchronization. Do not say your name aloud. Dialogue: ${text}`, title: `${businessName || "HelloAI"} - ${speaker}`, resolution: "720p", aspect_ratio: "16:9", motion_prompt: "Natural eye contact, expressive face, subtle hand gestures, calm confident delivery." }),
+        body: JSON.stringify({
+          type: "avatar",
+          avatar_id: config!.avatarId,
+          ...(config!.voiceId ? { voice_id: config!.voiceId } : {}),
+          script: text,
+          title: `${businessName || "HelloAI"} - ${speaker}`,
+          resolution: "720p",
+          aspect_ratio: "16:9",
+          motion_prompt: "Natural eye contact, realistic conversational expressions, subtle hand gestures, and calm confident delivery.",
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error?.message || `${speaker} video request failed`);
