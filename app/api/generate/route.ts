@@ -13,6 +13,7 @@ export async function POST(req: Request) {
     const configuredCharacters = Object.keys(process.env)
       .filter((key) => key.startsWith("HEYGEN_") && key.endsWith("_AVATAR_ID"))
       .map((key) => key.replace(/^HEYGEN_/, "").replace(/_AVATAR_ID$/, "").replace(/_/g, " "))
+      .filter((name) => name !== "AVATAR ID")
       .filter(Boolean);
     const characterRoster = configuredCharacters.length
       ? `The only available characters are: ${configuredCharacters.join(", ")}. Use these exact names and no others.`

@@ -2,7 +2,7 @@ type DialogueLine = { speaker: string; text: string };
 type CharacterConfig = { name: string; avatarId: string; voiceId?: string };
 
 function parseDialogue(script: string): DialogueLine[] {
-  return script.split(/\r?\n/).map((line) => line.match(/^\s*([^:]{1,40})\s*:\s*(.+)$/)).filter((match): match is RegExpMatchArray => Boolean(match)).map((match) => ({ speaker: match[1].trim(), text: match[2].trim() })).filter((line) => !/^(narrator|voiceover|scene|director)$/i.test(line.speaker));
+  return script.split(/\r?\n/).map((line) => line.match(/^\s*([^:]{1,40})\s*:\s*(.+)$/)).filter((match): match is RegExpMatchArray => Boolean(match)).map((match) => ({ speaker: match[1].trim(), text: match[2].trim() })).filter((line) => !/^(narrator|voiceover|scene|director|avatar id|voice id|character name|speaker)$/i.test(line.speaker));
 }
 
 function characterConfig(speaker: string, selected: CharacterConfig[]) {
