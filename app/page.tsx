@@ -387,11 +387,9 @@ export default function Home() {
                 <div className="assistant-heading"><div className="assistant-avatar">✦</div><div><span className="eyebrow">HELLOAI / ASSISTANT</span><h2>Your first draft is ready</h2></div><span className="draft-pill">Draft 01</span></div>
                 <pre className="script-preview">{result}</pre>
                 <div className="tool-row">
-                  <button type="button" onClick={generateVoice} className="secondary-button" disabled={Boolean(audioUrl)}>◉ {audioUrl ? "Voice ready" : "Generate voice"}</button>
                   <button type="button" onClick={generateScenes} disabled={isGeneratingScenes} className="secondary-button">▧ {isGeneratingScenes ? "Creating scenes..." : "Create scenes"}</button>
                   <button type="button" onClick={generateAiVideo} disabled={isGeneratingAiVideo || scenes.length === 0} className="primary-button small">{isGeneratingAiVideo ? "Rendering..." : "Generate moving video  →"}</button>
                 </div>
-                {audioUrl && <audio controls className="audio-player"><source src={audioUrl} type="audio/mpeg" /></audio>}
                 {aiVideoStatus && <div className="progress-note">{aiVideoStatus}</div>}
               </section>
             ) : (
@@ -404,7 +402,7 @@ export default function Home() {
           </section>
 
           <aside className="activity-column">
-            <div className="activity-card"><div className="section-heading"><div><span className="eyebrow">PROJECT PULSE</span><h2>Build plan</h2></div><span className="progress-number">{completedSteps}/4</span></div><div className="plan-list"><div className={result ? "plan-step done" : "plan-step current"}><span>01</span><div><strong>Shape the idea</strong><small>{result ? "Script generated" : "Waiting for your brief"}</small></div><b>{result ? "✓" : "·"}</b></div><div className={audioUrl ? "plan-step done" : "plan-step"}><span>02</span><div><strong>Give it a voice</strong><small>{audioUrl ? "Voiceover ready" : "Generate narration"}</small></div><b>{audioUrl ? "✓" : "·"}</b></div><div className={scenes.length === 3 ? "plan-step done" : "plan-step"}><span>03</span><div><strong>Set the scene</strong><small>{scenes.length === 3 ? "Three scenes ready" : "Create visual direction"}</small></div><b>{scenes.length === 3 ? "✓" : "·"}</b></div><div className={aiVideoUrl || videoUrl ? "plan-step done" : "plan-step"}><span>04</span><div><strong>Make it move</strong><small>{aiVideoUrl || videoUrl ? "Final MP4 ready" : "Render the video"}</small></div><b>{aiVideoUrl || videoUrl ? "✓" : "·"}</b></div></div></div>
+            <div className="activity-card"><div className="section-heading"><div><span className="eyebrow">PROJECT PULSE</span><h2>Build plan</h2></div><span className="progress-number">{completedSteps}/3</span></div><div className="plan-list"><div className={result ? "plan-step done" : "plan-step current"}><span>01</span><div><strong>Shape the idea</strong><small>{result ? "Script generated" : "Waiting for your brief"}</small></div><b>{result ? "✓" : "·"}</b></div><div className={scenes.length === 3 ? "plan-step done" : "plan-step"}><span>02</span><div><strong>Set the scene</strong><small>{scenes.length === 3 ? "Three scenes ready" : "Create visual direction"}</small></div><b>{scenes.length === 3 ? "✓" : "·"}</b></div><div className={aiVideoUrl || videoUrl ? "plan-step done" : "plan-step"}><span>03</span><div><strong>Make it talk</strong><small>{aiVideoUrl || videoUrl ? "Lip-synced MP4 ready" : "Render with HeyGen"}</small></div><b>{aiVideoUrl || videoUrl ? "✓" : "·"}</b></div></div></div>
             <div className="chat-card">
               <div className="section-heading"><div><span className="eyebrow">PROJECT ASSISTANT</span><h2>Ask HelloAI</h2></div><span className="chat-spark">✦</span></div>
               <div className="chat-thread">
