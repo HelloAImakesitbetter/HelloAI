@@ -14,6 +14,25 @@ function characterConfig(speaker: string, selected: CharacterConfig[]) {
   return avatarId ? { name: speaker, avatarId, ...(voiceId ? { voiceId } : {}) } : null;
 }
 
+async function loadHeyGenCatalog(apiKey: string) {
+  const headers = { "X-Api-Key": apiKey };
+  const [avatarsResponse, voicesResponse] = await Promise.all([
+    fetch("https://api.heygen.com/v2/avatars", { headers }),
+    fetch("https://api.heygen.com/v2/voices", { headers }),
+  ]);
+  const avatarsData = await avatarsResponse.json();
+  const voicesData = await voicesResponse.json();
+
+  if (!avatarsResponse.ok || !voicesResponse.ok) {
+    throw new Error("HeyGen could not load the automatic avatar and voice catalog");
+  }
+
+  return {
+    avatars: (avatarsData?.data?.avatars || []).filter((item: { id?: string }) => item.id),
+    voices: (voicesData?.data?.voices || []).filter((item: { id?: string }) => item.id),
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.HEYGEN_API_KEY;
@@ -24,7 +43,19 @@ export async function POST(req: Request) {
 
     const dialogue = parseDialogue(script);
     const speakers = [...new Set(dialogue.map((line) => line.speaker))];
-    const segments = speakers.map((speaker) => ({ speaker, text: dialogue.filter((line) => line.speaker === speaker).map((line) => line.text).join(" "), config: characterConfig(speaker, characters || []) }));
+    const catalog = await loadHeyGenCatalog(apiKey);
+    if (catalog.avatars.length === 0 || catalog.voices.length === 0) {
+      throw new Error("HeyGen returned no usable avatars or voices");
+    }
+    const segments = speakers.map((speaker, index) => ({
+      speaker,
+      text: dialogue.filter((line) => line.speaker === speaker).map((line) => line.text).join(" "),
+      config: characterConfig(speaker, characters || []) || {
+        name: speaker,
+        avatarId: catalog.avatars[index % catalog.avatars.length].id as string,
+        voiceId: catalog.voices[index % catalog.voices.length].id as string,
+      },
+    }));
     const missing = segments.filter((segment) => !segment.config).map((segment) => segment.speaker);
 
     if (missing.length > 0) {
