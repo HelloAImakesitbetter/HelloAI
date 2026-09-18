@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const task = await client.imageToVideo.create({
       model: "gen4_turbo",
       promptImage,
-      promptText: `Create a realistic cinematic commercial for ${businessName || "this business"}. Show cleaners physically working inside the property: walking between rooms, vacuuming, wiping surfaces, lifting supplies, checking finished areas, and interacting naturally with the location. Use realistic camera movement and natural body motion. Do not make people stand still as presenters. Do not show text, subtitles, logos, or spoken dialogue. Story direction: ${description || script}`.slice(0, 1000),
+      promptText: `Create a realistic cinematic commercial for ${businessName || "this business"}. Tell this visual story with continuous action: a customer completes a cleaning booking, the team receives the job and travels to the customer's house, the team arrives with supplies, cleaners enter the property and actively vacuum, mop, wipe surfaces, clean the kitchen and bathroom, inspect their work, and the happy customer walks through the freshly cleaned home. Show real locations, practical tools, walking, opening doors, lifting supplies, bending, reaching, and purposeful body movement. Make the people look like real workers in a real home, not static presenters. Use natural camera movement and cinematic cuts. Do not show text, subtitles, logos, or spoken dialogue; narration is added separately. Story direction: ${description || script}`.slice(0, 15000),
       ratio: "1280:720",
       duration: durationFromBrief(description || script),
     });
