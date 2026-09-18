@@ -17,14 +17,14 @@ function characterConfig(speaker: string, selected: CharacterConfig[]) {
 async function loadHeyGenCatalog(apiKey: string) {
   const headers = { "X-Api-Key": apiKey };
   const [avatarsResponse, voicesResponse] = await Promise.all([
-    fetch("https://api.heygen.com/v2/avatars", { headers }),
+    fetch("https://api.heygen.com/v2/avatars?avatar_type=photo_avatar", { headers }),
     fetch("https://api.heygen.com/v3/voices?limit=100", { headers }),
   ]);
   const avatarsData = await avatarsResponse.json();
   const voicesData = await voicesResponse.json();
 
   if (!avatarsResponse.ok || !voicesResponse.ok) {
-    throw new Error("HeyGen could not load the automatic avatar and voice catalog");
+    throw new Error("HeyGen could not load the automatic photo-avatar and voice catalog");
   }
 
   return {
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const speakers = [...new Set(dialogue.map((line) => line.speaker))].slice(0, 10);
     const catalog = await loadHeyGenCatalog(apiKey);
     if (catalog.avatars.length === 0 || catalog.voices.length === 0) {
-      throw new Error("HeyGen returned no usable avatars or voices");
+      throw new Error("HeyGen returned no usable photo avatars or voices for automatic video generation");
     }
     const segments = speakers.map((speaker, index) => ({
       speaker,
