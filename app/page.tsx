@@ -192,7 +192,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ script: result }),
+        body: JSON.stringify({ script: result, businessName, description }),
       });
 
       if (!response.ok) {

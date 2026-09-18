@@ -13,7 +13,11 @@ export async function POST(req: Request) {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    const { script } = await req.json();
+    const { script, businessName, description } = (await req.json()) as {
+      script?: string;
+      businessName?: string;
+      description?: string;
+    };
 
     if (!script || typeof script !== "string") {
       return Response.json(
@@ -22,10 +26,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const speakers = Array.from(
+      new Set(
+        script
+          .split(/\r?\n/)
+          .map((line) => line.match(/^\s*([^:]{1,40})\s*:/)?.[1]?.trim())
+          .filter((speaker): speaker is string => Boolean(speaker))
+          .filter((speaker) => !/^(narrator|voiceover|scene|director)$/i.test(speaker))
+      )
+    ).slice(0, 5);
+    const castDescription = speakers.length
+      ? `The exact recurring cast is: ${speakers.join(", ")}. Keep these same people, appearances, clothing palette, ages, and roles consistent across every scene.`
+      : "Keep the same recurring people and visual identity consistent across every scene.";
+
     const openai = new OpenAI({ apiKey });
     const sceneResponse = await openai.responses.create({
       model: "gpt-4.1-mini",
-      input: `Break this marketing video script into exactly three visual scenes. Return only a valid JSON array with this shape: [{"scene":1,"imagePrompt":"..."}]. Each imagePrompt should describe a polished, realistic commercial image with no text or logos in the image.\n\nScript:\n${script}`,
+      input: `Break this marketing video into exactly three visual scenes that directly match the dialogue and business brief. Return only a valid JSON array with this shape: [{"scene":1,"imagePrompt":"..."}]. Each imagePrompt must describe the people and action that the dialogue is discussing, use the same recurring cast in every scene, and contain no text, captions, logos, or invented unrelated people.\n\nBusiness: ${businessName || "Unnamed business"}\nBrief: ${description || "Not provided"}\n${castDescription}\n\nDialogue:\n${script}`,
     });
 
     const rawSceneOutput = sceneResponse.output_text.trim();
