@@ -19,6 +19,10 @@ export async function POST(req: Request) {
     const requestedCount = requestedCountMatch
       ? Math.min(Math.max(Number(requestedCountMatch[1]), 1), 10)
       : 3;
+    const requestedDurationMatch = String(description || "").match(/(\d+)\s*(seconds?|secs?|minutes?|mins?)/i);
+    const requestedDuration = requestedDurationMatch
+      ? Math.min(Math.max(Number(requestedDurationMatch[1]) * (/minutes?|mins?/i.test(requestedDurationMatch[2]) ? 60 : 1), 10), 180)
+      : 20;
     const characterRoster = configuredCharacters.length
       ? `The only available characters are: ${configuredCharacters.join(", ")}. Use these exact names and no others.`
       : "Use customer-provided names, or choose names if none were provided.";
@@ -31,7 +35,7 @@ Business Name: ${businessName}
 Description:
 ${description}
 
-Write a 60-second marketing video dialogue for exactly ${requestedCount} distinct characters. ${characterRoster} If the roster has fewer names than requested, generate the remaining natural names. Give each character a clear personality and role in the business or customer story. Make every character speak at least once. Use only this exact format, one spoken line per row:
+Write a ${requestedDuration}-second marketing video dialogue for exactly ${requestedCount} distinct characters. ${characterRoster} If the roster has fewer names than requested, generate the remaining natural names. Give each character a clear personality and role in the business or customer story. Make every character speak at least once. Keep the dialogue concise enough to fit the requested duration. Use only this exact format, one spoken line per row:
 Character name: spoken line
 
 Every character must speak at least once. Do not include a narrator, voiceover label, stage directions, scene descriptions, bracketed text, subtitles, logos, or on-screen text. Return only spoken dialogue rows.
