@@ -14,6 +14,12 @@ const localFfmpegPath = path.resolve(
   process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"
 );
 const defaultVoiceId = "JBFqnCBsd6RMkjVDRZzb";
+const defaultVoiceSettings = {
+  stability: 0.48,
+  similarity_boost: 0.82,
+  style: 0.18,
+  use_speaker_boost: true,
+};
 
 type DialogueLine = { speaker: string; text: string };
 
@@ -30,6 +36,7 @@ async function generateSpeech(apiKey: string, voiceId: string, text: string) {
       body: JSON.stringify({
         text,
         model_id: "eleven_multilingual_v2",
+        voice_settings: defaultVoiceSettings,
       }),
     }
   );
@@ -72,15 +79,23 @@ export async function POST(req: Request) {
     }
 
     const dialogue = parseDialogue(script);
+    let voiceMap: Record<string, string> = {};
+
+    try {
+      voiceMap = JSON.parse(process.env.ELEVENLABS_VOICE_MAP || "{}");
+    } catch {
+      throw new Error("ELEVENLABS_VOICE_MAP must be valid JSON");
+    }
+
     const voiceIds = (process.env.ELEVENLABS_VOICE_IDS || process.env.ELEVENLABS_VOICE_ID || defaultVoiceId)
       .split(",")
       .map((voiceId) => voiceId.trim())
-        .filter((voiceId) => voiceId && !/^voice_id_\d+$/i.test(voiceId))
+      .filter((voiceId) => voiceId && !/^voice_id_\d+$/i.test(voiceId))
       .filter(Boolean);
 
-      if (voiceIds.length === 0) {
-        voiceIds.push(defaultVoiceId);
-      }
+    if (voiceIds.length === 0) {
+      voiceIds.push(defaultVoiceId);
+    }
 
     if (dialogue.length === 0) {
       return new Response(await generateSpeech(apiKey, voiceIds[0], script), {
@@ -91,12 +106,11 @@ export async function POST(req: Request) {
     const audioFiles = [];
 
     for (const [index, line] of dialogue.entries()) {
-      const speakerIndex = dialogue.findIndex(
-        (candidate) => candidate.speaker === line.speaker
-      );
+      const speakerIndex = dialogue.findIndex((candidate) => candidate.speaker === line.speaker);
+      const mappedVoiceId = voiceMap[line.speaker] || voiceMap[line.speaker.toLowerCase()];
       const bytes = await generateSpeech(
         apiKey,
-        voiceIds[(speakerIndex >= 0 ? speakerIndex : index) % voiceIds.length],
+        mappedVoiceId || voiceIds[(speakerIndex >= 0 ? speakerIndex : index) % voiceIds.length],
         line.text
       );
       audioFiles.push({
