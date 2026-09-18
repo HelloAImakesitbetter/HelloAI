@@ -13,6 +13,8 @@ type WebsitePage = {
   benefits: string[];
   steps: string[];
   closing: string;
+  seoTitle: string;
+  seoDescription: string;
 };
 type WebsiteDraft = { pages: WebsitePage[] };
 type Photo = { name: string; url: string; x: number; y: number };
@@ -28,6 +30,9 @@ export default function WebsiteBuilderPage() {
   const [draggingPhoto, setDraggingPhoto] = useState<{ pageSlug: string; name: string } | null>(null);
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
+  const seoTitleLength = selectedPage?.seoTitle?.length || 0;
+  const seoDescriptionLength = selectedPage?.seoDescription?.length || 0;
+  const seoChecks = [seoTitleLength >= 30 && seoTitleLength <= 60, seoDescriptionLength >= 120 && seoDescriptionLength <= 160, Boolean(selectedPage?.title), Boolean(selectedPage?.primaryCta)].filter(Boolean).length;
 
   useEffect(() => {
     const saved = window.localStorage.getItem("helloai-website-draft");
@@ -98,7 +103,7 @@ export default function WebsiteBuilderPage() {
             <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div><div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
           </div> : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
         </section>
-        {selectedPage && <aside className="website-editor-panel"><span className="eyebrow">EDIT {selectedPage.label.toUpperCase()}</span><h2>Page controls</h2><label>Headline<input value={selectedPage.title} onChange={(event) => updateSelectedPage("title", event.target.value)} /></label><label>Tagline<textarea value={selectedPage.tagline} onChange={(event) => updateSelectedPage("tagline", event.target.value)} /></label><label>Intro<textarea value={selectedPage.intro} onChange={(event) => updateSelectedPage("intro", event.target.value)} /></label><label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label><label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label><div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><img src={photo.url} alt={photo.name} /><span>{photo.name}</span></div>)}</div></aside>}
+        {selectedPage && <aside className="website-editor-panel"><span className="eyebrow">EDIT {selectedPage.label.toUpperCase()}</span><h2>Page controls</h2><label>Headline<input value={selectedPage.title} onChange={(event) => updateSelectedPage("title", event.target.value)} /></label><label>Tagline<textarea value={selectedPage.tagline} onChange={(event) => updateSelectedPage("tagline", event.target.value)} /></label><label>Intro<textarea value={selectedPage.intro} onChange={(event) => updateSelectedPage("intro", event.target.value)} /></label><label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label><label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label><div className="seo-panel"><div className="seo-panel-heading"><span className="eyebrow">SEO READINESS</span><strong>{seoChecks}/4</strong></div><label>SEO title <small>{seoTitleLength}/60 characters</small><input value={selectedPage.seoTitle || ""} onChange={(event) => updateSelectedPage("seoTitle", event.target.value)} /></label><label>SEO description <small>{seoDescriptionLength}/160 characters</small><textarea value={selectedPage.seoDescription || ""} onChange={(event) => updateSelectedPage("seoDescription", event.target.value)} /></label><p>Use a clear service, location, and customer outcome. These fields become your search preview.</p></div><div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><img src={photo.url} alt={photo.name} /><span>{photo.name}</span></div>)}</div></aside>}
       </div>
     </main>
   );

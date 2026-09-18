@@ -11,6 +11,8 @@ type WebsitePage = {
   benefits: string[];
   steps: string[];
   closing: string;
+  seoTitle: string;
+  seoDescription: string;
 };
 
 type WebsiteDraft = { pages: WebsitePage[] };
@@ -26,7 +28,7 @@ function parseDraft(output: string): WebsiteDraft {
   }
 
   for (const page of draft.pages) {
-    if (!page.slug || !page.label || !page.title || !page.tagline || !page.intro || !Array.isArray(page.benefits) || !Array.isArray(page.steps)) {
+    if (!page.slug || !page.label || !page.title || !page.tagline || !page.intro || !page.seoTitle || !page.seoDescription || !Array.isArray(page.benefits) || !Array.isArray(page.steps)) {
       throw new Error("The AI returned incomplete page content");
     }
   }
@@ -53,9 +55,9 @@ Business brief:
 ${description}
 
 Return only valid JSON with this exact shape:
-{"pages":[{"slug":"home","label":"Home","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""},{"slug":"services","label":"Services","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""},{"slug":"about","label":"About","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""},{"slug":"contact","label":"Contact","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""}]}
+{"pages":[{"slug":"home","label":"Home","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""},{"slug":"services","label":"Services","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""},{"slug":"about","label":"About","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""},{"slug":"contact","label":"Contact","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""}]}
 
-Write clear customer-facing copy. Keep the four pages distinct. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
+Write clear customer-facing copy. Keep the four pages distinct. Write SEO titles under 60 characters and SEO descriptions between 120 and 160 characters using natural local search language from the brief. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
     });
 
     return Response.json({ draft: parseDraft(response.output_text) });
