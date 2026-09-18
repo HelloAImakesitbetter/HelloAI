@@ -1,5 +1,4 @@
 import ffmpegPath from "ffmpeg-static";
-import OpenAI from "openai";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -14,9 +13,34 @@ const localFfmpegPath = path.resolve(
   "ffmpeg-static",
   process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"
 );
-const characterVoices = ["alloy", "echo", "fable", "onyx", "nova"] as const;
+const defaultVoiceId = "JBFqnCBsd6RMkjVDRZzb";
 
 type DialogueLine = { speaker: string; text: string };
+
+async function generateSpeech(apiKey: string, voiceId: string, text: string) {
+  const response = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "audio/mpeg",
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`ElevenLabs voice generation failed (${response.status}): ${errorText.slice(0, 240)}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
 
 function parseDialogue(script: string): DialogueLine[] {
   return script
@@ -35,10 +59,10 @@ export async function POST(req: Request) {
   let workingDirectory = "";
 
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!apiKey) {
-      throw new Error("OPENAI_API_KEY is not configured");
+      throw new Error("ELEVENLABS_API_KEY is not configured");
     }
 
     const { script } = (await req.json()) as { script?: string };
@@ -48,16 +72,13 @@ export async function POST(req: Request) {
     }
 
     const dialogue = parseDialogue(script);
-    const openai = new OpenAI({ apiKey });
+    const voiceIds = (process.env.ELEVENLABS_VOICE_IDS || process.env.ELEVENLABS_VOICE_ID || defaultVoiceId)
+      .split(",")
+      .map((voiceId) => voiceId.trim())
+      .filter(Boolean);
 
     if (dialogue.length === 0) {
-      const speech = await openai.audio.speech.create({
-        model: "gpt-4o-mini-tts",
-        voice: "alloy",
-        input: script,
-      });
-
-      return new Response(Buffer.from(await speech.arrayBuffer()), {
+      return new Response(await generateSpeech(apiKey, voiceIds[0], script), {
         headers: { "Content-Type": "audio/mpeg" },
       });
     }
@@ -67,14 +88,14 @@ export async function POST(req: Request) {
         const speakerIndex = dialogue.findIndex(
           (candidate) => candidate.speaker === line.speaker
         );
-        const speech = await openai.audio.speech.create({
-          model: "gpt-4o-mini-tts",
-          voice: characterVoices[(speakerIndex >= 0 ? speakerIndex : index) % characterVoices.length],
-          input: line.text,
-        });
+        const bytes = await generateSpeech(
+          apiKey,
+          voiceIds[(speakerIndex >= 0 ? speakerIndex : index) % voiceIds.length],
+          line.text
+        );
         return {
           fileName: `dialogue-${index}.mp3`,
-          bytes: Buffer.from(await speech.arrayBuffer()),
+          bytes,
         };
       })
     );
