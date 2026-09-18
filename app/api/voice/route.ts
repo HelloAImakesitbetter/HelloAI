@@ -75,7 +75,12 @@ export async function POST(req: Request) {
     const voiceIds = (process.env.ELEVENLABS_VOICE_IDS || process.env.ELEVENLABS_VOICE_ID || defaultVoiceId)
       .split(",")
       .map((voiceId) => voiceId.trim())
+        .filter((voiceId) => voiceId && !/^voice_id_\d+$/i.test(voiceId))
       .filter(Boolean);
+
+      if (voiceIds.length === 0) {
+        voiceIds.push(defaultVoiceId);
+      }
 
     if (dialogue.length === 0) {
       return new Response(await generateSpeech(apiKey, voiceIds[0], script), {
