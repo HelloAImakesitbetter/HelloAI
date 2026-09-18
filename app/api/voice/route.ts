@@ -83,22 +83,22 @@ export async function POST(req: Request) {
       });
     }
 
-    const audioFiles = await Promise.all(
-      dialogue.map(async (line, index) => {
-        const speakerIndex = dialogue.findIndex(
-          (candidate) => candidate.speaker === line.speaker
-        );
-        const bytes = await generateSpeech(
-          apiKey,
-          voiceIds[(speakerIndex >= 0 ? speakerIndex : index) % voiceIds.length],
-          line.text
-        );
-        return {
-          fileName: `dialogue-${index}.mp3`,
-          bytes,
-        };
-      })
-    );
+    const audioFiles = [];
+
+    for (const [index, line] of dialogue.entries()) {
+      const speakerIndex = dialogue.findIndex(
+        (candidate) => candidate.speaker === line.speaker
+      );
+      const bytes = await generateSpeech(
+        apiKey,
+        voiceIds[(speakerIndex >= 0 ? speakerIndex : index) % voiceIds.length],
+        line.text
+      );
+      audioFiles.push({
+        fileName: `dialogue-${index}.mp3`,
+        bytes,
+      });
+    }
 
     const executablePath = existsSync(localFfmpegPath) ? localFfmpegPath : ffmpegPath;
 
