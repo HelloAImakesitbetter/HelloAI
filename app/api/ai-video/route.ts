@@ -14,6 +14,16 @@ function characterConfig(speaker: string, selected: CharacterConfig[]) {
   return avatarId ? { name: speaker, avatarId, ...(voiceId ? { voiceId } : {}) } : null;
 }
 
+function activityPrompt(text: string) {
+  const lower = text.toLowerCase();
+  if (/clean|wipe|vacuum|mop|scrub|wash|polish/.test(lower)) return "actively clean the space with realistic wiping, vacuuming, mopping, and checking surfaces";
+  if (/drive|driving|car|van|deliver|delivery/.test(lower)) return "realistically drive or prepare a vehicle for delivery, with natural hand and eye movement";
+  if (/cook|kitchen|food|serve|restaurant|coffee/.test(lower)) return "work naturally in the kitchen or service setting, preparing and presenting the product";
+  if (/build|repair|install|tool|construct/.test(lower)) return "perform the practical work with appropriate tools and careful hand movements";
+  if (/teach|train|class|lesson/.test(lower)) return "teach and demonstrate the subject with natural gestures and attention to the learner";
+  return "perform natural work-related actions in the business setting while interacting with the environment";
+}
+
 async function loadHeyGenCatalog(apiKey: string) {
   const headers = { "X-Api-Key": apiKey };
     const [avatarsResponse, voicesResponse] = await Promise.all([
@@ -75,7 +85,7 @@ export async function POST(req: Request) {
           title: `${businessName || "HelloAI"} - ${speaker}`,
           resolution: "720p",
           aspect_ratio: "16:9",
-          motion_prompt: "Natural eye contact, realistic conversational expressions, subtle hand gestures, and calm confident delivery.",
+          motion_prompt: `${activityPrompt(`${description || ""} ${text}`)} in the real-world setting for ${businessName || "the business"}. Show natural eye contact, realistic conversational expressions, purposeful body movement, and interaction with the location. Do not stand still like a presenter.`,
         }),
       });
       const data = await response.json();
