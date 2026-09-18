@@ -15,6 +15,10 @@ export async function POST(req: Request) {
       .map((key) => key.replace(/^HEYGEN_/, "").replace(/_AVATAR_ID$/, "").replace(/_/g, " "))
       .filter((name) => name !== "AVATAR ID")
       .filter(Boolean);
+    const requestedCountMatch = String(description || "").match(/(\d+)\s*(?:characters?|people|speakers?)/i);
+    const requestedCount = requestedCountMatch
+      ? Math.min(Math.max(Number(requestedCountMatch[1]), 1), 10)
+      : 3;
     const characterRoster = configuredCharacters.length
       ? `The only available characters are: ${configuredCharacters.join(", ")}. Use these exact names and no others.`
       : "Use customer-provided names, or choose names if none were provided.";
@@ -27,7 +31,7 @@ Business Name: ${businessName}
 Description:
 ${description}
 
-Write a 60-second marketing video dialogue for exactly ten distinct characters. ${characterRoster} If the roster has fewer than ten names, generate the remaining natural names. Give each character a clear personality and role in the business or customer story. Make every character speak at least once. Use only this exact format, one spoken line per row:
+Write a 60-second marketing video dialogue for exactly ${requestedCount} distinct characters. ${characterRoster} If the roster has fewer names than requested, generate the remaining natural names. Give each character a clear personality and role in the business or customer story. Make every character speak at least once. Use only this exact format, one spoken line per row:
 Character name: spoken line
 
 Every character must speak at least once. Do not include a narrator, voiceover label, stage directions, scene descriptions, bracketed text, subtitles, logos, or on-screen text. Return only spoken dialogue rows.
