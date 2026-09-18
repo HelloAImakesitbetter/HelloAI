@@ -10,6 +10,10 @@ export default function ImageEditorPage() {
   const [contrast, setContrast] = useState(100);
   const [saturation, setSaturation] = useState(100);
   const [rotation, setRotation] = useState(0);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiImageUrl, setAiImageUrl] = useState("");
+  const [isAiEditing, setIsAiEditing] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!sourceUrl || !canvasRef.current) return;
@@ -38,6 +42,30 @@ export default function ImageEditorPage() {
     if (!file) return;
     setFileName(file.name.replace(/\.[^.]+$/, "") + "-edited.png");
     setSourceUrl(URL.createObjectURL(file));
+    setAiImageUrl("");
+    setError("");
+  };
+
+  const editWithAi = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || !aiPrompt.trim()) return;
+    setIsAiEditing(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/image-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: canvas.toDataURL("image/png"), prompt: aiPrompt }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to edit image");
+      setAiImageUrl(data.imageDataUrl);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to edit image");
+    } finally {
+      setIsAiEditing(false);
+    }
   };
 
   const downloadImage = () => {
@@ -61,9 +89,10 @@ export default function ImageEditorPage() {
             <label>Contrast <output>{contrast}%</output><input type="range" min="40" max="160" value={contrast} onChange={(event) => setContrast(Number(event.target.value))} /></label>
             <label>Colour <output>{saturation}%</output><input type="range" min="0" max="180" value={saturation} onChange={(event) => setSaturation(Number(event.target.value))} /></label>
           </div>
+          <div className="ai-edit-box"><span className="eyebrow">AI EDIT</span><textarea value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} placeholder="e.g. Change the outfit to a smart navy blazer and keep the face natural" /><button className="secondary-button" type="button" onClick={editWithAi} disabled={!sourceUrl || !aiPrompt.trim() || isAiEditing}>{isAiEditing ? "Editing with AI..." : "Apply AI edit"}</button>{error && <p className="image-error">{error}</p>}</div>
           <div className="image-action-row"><button className="secondary-button" type="button" onClick={() => setRotation((value) => (value + 90) % 360)} disabled={!sourceUrl}>Rotate 90°</button><button className="primary-button" type="button" onClick={downloadImage} disabled={!sourceUrl}>Download image ↓</button></div>
         </section>
-        <section className="image-canvas-frame"><div className="image-canvas-topline"><span>LIVE PREVIEW</span><span>{sourceUrl ? "Edits are ready" : "Choose a photo to begin"}</span></div>{sourceUrl ? <canvas ref={canvasRef} className="image-editor-canvas" /> : <div className="image-editor-empty"><span>✦</span><h2>Your photo will appear here.</h2><p>Nothing leaves your browser for basic edits.</p></div>}</section>
+        <section className="image-canvas-frame"><div className="image-canvas-topline"><span>LIVE PREVIEW</span><span>{sourceUrl ? "Edits are ready" : "Choose a photo to begin"}</span></div>{sourceUrl ? <><canvas ref={canvasRef} className="image-editor-canvas" />{aiImageUrl && <div className="ai-result"><span className="eyebrow">AI EDIT PREVIEW</span><img src={aiImageUrl} alt="AI edited preview" /><a className="primary-button" href={aiImageUrl} download={fileName}>Download AI edit ↓</a></div>}</> : <div className="image-editor-empty"><span>✦</span><h2>Your photo will appear here.</h2><p>Nothing leaves your browser for basic edits.</p></div>}</section>
       </div>
     </main>
   );
