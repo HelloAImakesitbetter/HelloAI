@@ -16,8 +16,6 @@ type Character = { name: string; avatarId: string; voiceId: string };
 
 export default function Home() {
   const [result, setResult] = useState("");
-  const [audioUrl, setAudioUrl] = useState("");
-  const [audioDataUrl, setAudioDataUrl] = useState("");
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [videoUrl, setVideoUrl] = useState("");
   const [aiVideoUrl, setAiVideoUrl] = useState("");
@@ -27,7 +25,6 @@ export default function Home() {
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
-  const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [error, setError] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -92,7 +89,6 @@ export default function Home() {
 
       setResult(data.script);
       setScenes([]);
-      setAudioDataUrl("");
       setVideoUrl("");
       setAiVideoUrl("");
       setAiVideoStatus("");
@@ -183,50 +179,6 @@ export default function Home() {
     }
   };
 
-  const generateVoice = async () => {
-    if (!result) {
-      return;
-    }
-
-    setError("");
-
-    try {
-      const response = await fetch("/api/voice", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ script: result, businessName, description }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || "Failed to generate voiceover");
-      }
-
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-
-      const blob = await response.blob();
-      const audioData = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("Failed to read voiceover"));
-        reader.readAsDataURL(blob);
-      });
-
-      setAudioUrl(URL.createObjectURL(blob));
-      setAudioDataUrl(audioData);
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Failed to generate voiceover"
-      );
-    }
-  };
-
   const generateScenes = async () => {
     if (!result) {
       return;
@@ -261,44 +213,6 @@ export default function Home() {
     }
   };
 
-  const createVideo = async () => {
-    if (scenes.length !== 3 || !audioDataUrl) {
-      return;
-    }
-
-    setIsCreatingVideo(true);
-    setError("");
-
-    try {
-      const response = await fetch("/api/video", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ scenes, audioDataUrl }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || "Failed to create video");
-      }
-
-      if (videoUrl) {
-        URL.revokeObjectURL(videoUrl);
-      }
-
-      setVideoUrl(URL.createObjectURL(await response.blob()));
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Failed to create video"
-      );
-    } finally {
-      setIsCreatingVideo(false);
-    }
-  };
-
   const sendChatMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const content = chatInput.trim();
@@ -321,7 +235,7 @@ export default function Home() {
           messages: nextMessages,
           businessName,
           description,
-          progress: `${result ? "script" : "brief"}${audioUrl ? ", voice" : ""}${scenes.length === 3 ? ", scenes" : ""}${aiVideoUrl || videoUrl ? ", video" : ""}`,
+          progress: `${result ? "script" : "brief"}${scenes.length === 3 ? ", scenes" : ""}${aiVideoUrl || videoUrl ? ", video" : ""}`,
         }),
       });
       const data = await response.json();
@@ -340,7 +254,6 @@ export default function Home() {
 
   const completedSteps = [
     Boolean(result),
-    Boolean(audioUrl),
     scenes.length === 3,
     Boolean(aiVideoUrl || videoUrl),
   ].filter(Boolean).length;
