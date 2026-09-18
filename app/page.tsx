@@ -351,6 +351,7 @@ export default function Home() {
         <p className="sidebar-label">Workspace</p>
         <nav className="sidebar-nav" aria-label="Workspace navigation">
           <button className="nav-item active" type="button"><span>✦</span> Create</button>
+          <a className="nav-item" href="/website"><span>▤</span> Website builder</a>
           <button className="nav-item" type="button"><span>◫</span> Projects</button>
           <button className="nav-item" type="button"><span>◌</span> Assets</button>
         </nav>

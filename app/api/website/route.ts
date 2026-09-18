@@ -1,0 +1,76 @@
+import OpenAI from "openai";
+
+type WebsiteDraft = {
+  title: string;
+  tagline: string;
+  intro: string;
+  primaryCta: string;
+  secondaryCta: string;
+  benefits: string[];
+  steps: string[];
+  closing: string;
+};
+
+function parseDraft(output: string): WebsiteDraft {
+  const start = output.indexOf("{");
+  const end = output.lastIndexOf("}");
+
+  if (start === -1 || end < start) {
+    throw new Error("The AI returned an invalid website draft");
+  }
+
+  const draft = JSON.parse(output.slice(start, end + 1)) as WebsiteDraft;
+
+  if (
+    !draft.title ||
+    !draft.tagline ||
+    !draft.intro ||
+    !Array.isArray(draft.benefits) ||
+    !Array.isArray(draft.steps)
+  ) {
+    throw new Error("The AI returned incomplete website content");
+  }
+
+  return draft;
+}
+
+export async function POST(req: Request) {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    const { businessName, description } = (await req.json()) as {
+      businessName?: string;
+      description?: string;
+    };
+
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
+
+    if (!description || typeof description !== "string") {
+      return Response.json({ error: "A website brief is required" }, { status: 400 });
+    }
+
+    const openai = new OpenAI({ apiKey });
+    const response = await openai.responses.create({
+      model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
+      input: `Create a polished small-business landing page draft for ${businessName || "this business"}.
+
+Business brief:
+${description}
+
+Return only valid JSON with this exact shape:
+{"title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":""}
+
+Write clear customer-facing copy. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
+    });
+
+    return Response.json({ draft: parseDraft(response.output_text) });
+  } catch (error) {
+    console.error("Website generation failed:", error);
+
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Failed to build website" },
+      { status: 500 }
+    );
+  }
+}
