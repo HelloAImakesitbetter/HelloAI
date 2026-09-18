@@ -1,4 +1,4 @@
-type HeyGenItem = { id?: string; name?: string; preview_image_url?: string; image_url?: string; gender?: string; language?: string };
+type HeyGenItem = { id?: string; avatar_id?: string; voice_id?: string; name?: string; preview_image_url?: string; image_url?: string; gender?: string; language?: string };
 
 export async function GET() {
   try {
@@ -7,14 +7,16 @@ export async function GET() {
     const headers = { "X-Api-Key": apiKey };
     const [avatarResponse, voiceResponse] = await Promise.all([
       fetch("https://api.heygen.com/v2/avatars", { headers }),
-      fetch("https://api.heygen.com/v2/voices", { headers }),
+      fetch("https://api.heygen.com/v3/voices?limit=100", { headers }),
     ]);
     const avatarsData = await avatarResponse.json();
     const voicesData = await voiceResponse.json();
     if (!avatarResponse.ok) throw new Error(avatarsData?.error?.message || "Failed to load HeyGen avatars");
     if (!voiceResponse.ok) throw new Error(voicesData?.error?.message || "Failed to load HeyGen voices");
-    const avatars = ((avatarsData?.data?.avatars || []) as HeyGenItem[]).filter((item) => item.id).map((item) => ({ id: item.id, name: item.name || item.id, previewUrl: item.preview_image_url || item.image_url || "", gender: item.gender || "" }));
-    const voices = ((voicesData?.data?.voices || []) as HeyGenItem[]).filter((item) => item.id).map((item) => ({ id: item.id, name: item.name || item.id, gender: item.gender || "", language: item.language || "" }));
+    const rawAvatars = (avatarsData?.data?.avatars || avatarsData?.data || []) as HeyGenItem[];
+    const rawVoices = (voicesData?.data?.voices || voicesData?.data || []) as HeyGenItem[];
+    const avatars = rawAvatars.map((item) => ({ id: item.id || item.avatar_id, name: item.name || item.id || item.avatar_id, previewUrl: item.preview_image_url || item.image_url || "", gender: item.gender || "" })).filter((item) => item.id);
+    const voices = rawVoices.map((item) => ({ id: item.id || item.voice_id, name: item.name || item.id || item.voice_id, gender: item.gender || "", language: item.language || "" })).filter((item) => item.id);
     return Response.json({ avatars, voices });
   } catch (error) {
     console.error("Character catalog failed:", error);

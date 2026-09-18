@@ -18,7 +18,7 @@ async function loadHeyGenCatalog(apiKey: string) {
   const headers = { "X-Api-Key": apiKey };
   const [avatarsResponse, voicesResponse] = await Promise.all([
     fetch("https://api.heygen.com/v2/avatars", { headers }),
-    fetch("https://api.heygen.com/v2/voices", { headers }),
+    fetch("https://api.heygen.com/v3/voices?limit=100", { headers }),
   ]);
   const avatarsData = await avatarsResponse.json();
   const voicesData = await voicesResponse.json();
@@ -28,8 +28,8 @@ async function loadHeyGenCatalog(apiKey: string) {
   }
 
   return {
-    avatars: (avatarsData?.data?.avatars || []).filter((item: { id?: string }) => item.id),
-    voices: (voicesData?.data?.voices || []).filter((item: { id?: string }) => item.id),
+    avatars: (avatarsData?.data?.avatars || avatarsData?.data || []).map((item: { id?: string; avatar_id?: string }) => ({ ...item, id: item.id || item.avatar_id })).filter((item: { id?: string }) => item.id),
+    voices: (voicesData?.data?.voices || voicesData?.data || []).map((item: { id?: string; voice_id?: string }) => ({ ...item, id: item.id || item.voice_id })).filter((item: { id?: string }) => item.id),
   };
 }
 
