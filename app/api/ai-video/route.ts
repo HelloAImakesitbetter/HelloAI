@@ -16,8 +16,8 @@ function characterConfig(speaker: string, selected: CharacterConfig[]) {
 
 async function loadHeyGenCatalog(apiKey: string) {
   const headers = { "X-Api-Key": apiKey };
-  const [avatarsResponse, voicesResponse] = await Promise.all([
-    fetch("https://api.heygen.com/v2/avatars?avatar_type=photo_avatar", { headers }),
+    const [avatarsResponse, voicesResponse] = await Promise.all([
+      fetch("https://api.heygen.com/v3/avatars/looks?avatar_type=photo_avatar&ownership=public&limit=50", { headers }),
     fetch("https://api.heygen.com/v3/voices?limit=100", { headers }),
   ]);
   const avatarsData = await avatarsResponse.json();
@@ -28,7 +28,7 @@ async function loadHeyGenCatalog(apiKey: string) {
   }
 
   return {
-    avatars: (avatarsData?.data?.avatars || avatarsData?.data || []).map((item: { id?: string; avatar_id?: string; supported_api_engines?: string[] }) => ({ ...item, id: item.id || item.avatar_id })).filter((item: { id?: string; supported_api_engines?: string[] }) => item.id && (!item.supported_api_engines || item.supported_api_engines.includes("avatar_iv"))),
+    avatars: (avatarsData?.data?.avatars || avatarsData?.data || []).map((item: { id?: string; default_voice_id?: string; supported_api_engines?: string[] }) => ({ ...item, id: item.id, default_voice_id: item.default_voice_id })).filter((item: { id?: string; supported_api_engines?: string[] }) => item.id && item.supported_api_engines?.includes("avatar_iv")),
     voices: (voicesData?.data?.voices || voicesData?.data || []).map((item: { id?: string; voice_id?: string }) => ({ ...item, id: item.id || item.voice_id })).filter((item: { id?: string }) => item.id),
   };
 }
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       config: characterConfig(speaker, characters || []) || {
         name: speaker,
         avatarId: catalog.avatars[index % catalog.avatars.length].id as string,
-        voiceId: catalog.voices[index % catalog.voices.length].id as string,
+        voiceId: (catalog.avatars[index % catalog.avatars.length].default_voice_id || catalog.voices[index % catalog.voices.length].id) as string,
       },
     }));
     const missing = segments.filter((segment) => !segment.config).map((segment) => segment.speaker);
