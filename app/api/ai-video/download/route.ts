@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const concatPath = path.join(workingDirectory, "clips.txt");
     await writeFile(concatPath, clipPaths.map((filePath) => `file '${filePath.replace(/\\/g, "/")}'`).join("\n"));
     const outputPath = path.join(workingDirectory, "helloai-multi-character.mp4");
-    await execFileAsync(executablePath, ["-y", "-f", "concat", "-safe", "0", "-i", concatPath, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", outputPath]);
+    await execFileAsync(executablePath, ["-y", "-f", "concat", "-safe", "0", "-i", concatPath, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", outputPath], { maxBuffer: 10 * 1024 * 1024 });
 
     return new Response(await readFile(outputPath), { headers: { "Content-Type": "video/mp4", "Content-Disposition": "attachment; filename=helloai-multi-character.mp4" } });
   } catch (error) {
