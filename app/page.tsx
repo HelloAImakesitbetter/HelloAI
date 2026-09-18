@@ -25,6 +25,10 @@ export default function Home() {
   const [isGeneratingAiVideo, setIsGeneratingAiVideo] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
+  const [propertyAddress, setPropertyAddress] = useState("");
+  const [serviceDate, setServiceDate] = useState("");
+  const [arrivalWindow, setArrivalWindow] = useState("");
+  const [bookingStatus, setBookingStatus] = useState("idle");
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
@@ -41,10 +45,18 @@ export default function Home() {
       const project = JSON.parse(savedProject) as {
         businessName?: string;
         description?: string;
+        propertyAddress?: string;
+        serviceDate?: string;
+        arrivalWindow?: string;
+        bookingStatus?: string;
         chatMessages?: ChatMessage[];
       };
       setBusinessName(project.businessName || "");
       setDescription(project.description || "");
+      setPropertyAddress(project.propertyAddress || "");
+      setServiceDate(project.serviceDate || "");
+      setArrivalWindow(project.arrivalWindow || "");
+      setBookingStatus(project.bookingStatus || "idle");
       setChatMessages(project.chatMessages || []);
     }
     const savedCharacters = window.localStorage.getItem("helloai-characters");
@@ -54,9 +66,22 @@ export default function Home() {
   useEffect(() => {
     window.localStorage.setItem(
       "helloai-project",
-      JSON.stringify({ businessName, description, chatMessages })
+      JSON.stringify({ businessName, description, propertyAddress, serviceDate, arrivalWindow, bookingStatus, chatMessages })
     );
-  }, [businessName, description, chatMessages]);
+  }, [businessName, description, propertyAddress, serviceDate, arrivalWindow, bookingStatus, chatMessages]);
+
+  const bookService = () => {
+    if (!propertyAddress || !serviceDate || !arrivalWindow) {
+      setError("Add the property address, service date, and arrival window first.");
+      return;
+    }
+    setBookingStatus("booked");
+    setError("");
+  };
+
+  const dispatchTeam = () => {
+    if (bookingStatus === "booked") setBookingStatus("dispatched");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +145,7 @@ export default function Home() {
       const response = await fetch("/api/ai-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessName, description, script: result, scenes, characters }),
+        body: JSON.stringify({ businessName, description: `${description}\nProperty address: ${propertyAddress}\nService date: ${serviceDate}\nArrival window: ${arrivalWindow}\nBooking status: ${bookingStatus}`, script: result, scenes, characters }),
       });
       const data = await response.json();
 
@@ -382,6 +407,7 @@ export default function Home() {
               <form onSubmit={handleSubmit} className="brief-form">
                 <label>Business or project name<input type="text" placeholder="e.g. HellowClean" value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></label>
                 <label>What should we create?<textarea placeholder="Describe the business, audience, offer, and feeling you want the video to have..." value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+                <div className="booking-fields"><span className="eyebrow">SERVICE BOOKING</span><p>These details become part of the customer-to-team story.</p><input placeholder="Property address" value={propertyAddress} onChange={(e) => setPropertyAddress(e.target.value)} /><div className="booking-row"><input type="date" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} /><select value={arrivalWindow} onChange={(e) => setArrivalWindow(e.target.value)}><option value="">Arrival window</option><option>09:00–11:00</option><option>11:00–13:00</option><option>13:00–15:00</option><option>15:00–17:00</option></select></div><div className="booking-actions"><button className="secondary-button" type="button" onClick={bookService}>Book service</button><button className="secondary-button" type="button" onClick={dispatchTeam} disabled={bookingStatus !== "booked"}>Dispatch team</button></div><small className="booking-status">{bookingStatus === "idle" ? "No booking created" : bookingStatus === "booked" ? "Booking confirmed" : "Team dispatched"}</small></div>
                 <div className="form-footer"><span className="field-hint">{description.length}/500 characters</span><button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Thinking..." : "Build the plan  →"}</button></div>
               </form>
             </div>
