@@ -6,12 +6,7 @@ export async function POST(req: Request) {
     if (!apiKey) throw new Error("HEYGEN_API_KEY is not configured");
     if (!Array.isArray(ids) || !ids[0]) return Response.json({ error: "A HeyGen session ID is required" }, { status: 400 });
 
-    const sessionResponse = await fetch(`https://api.heygen.com/v3/video-agents/${encodeURIComponent(ids[0])}`, { headers: { "X-Api-Key": apiKey } });
-    const sessionData = await sessionResponse.json();
-    const videoId = sessionData?.data?.video_id;
-    if (!sessionResponse.ok || !videoId) throw new Error("HeyGen video is not ready");
-
-    const videoResponse = await fetch(`https://api.heygen.com/v3/videos/${encodeURIComponent(videoId)}`, { headers: { "X-Api-Key": apiKey } });
+    const videoResponse = await fetch(`https://api.heygen.com/v3/videos/${encodeURIComponent(ids[0])}`, { headers: { "X-Api-Key": apiKey } });
     const videoData = await videoResponse.json();
     const videoUrl = videoData?.data?.video_url;
     if (!videoResponse.ok || !videoUrl) throw new Error("HeyGen video URL is not available");
