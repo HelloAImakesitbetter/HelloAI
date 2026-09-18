@@ -157,7 +157,7 @@ export default function Home() {
           const downloadResponse = await fetch("/api/ai-video/download", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: data.ids, audioDataUrl }),
+            body: JSON.stringify({ ids: data.ids, script: result }),
           });
 
           if (!downloadResponse.ok) {
