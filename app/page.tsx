@@ -12,6 +12,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
+type Character = { name: string; avatarId: string; voiceId: string };
 
 export default function Home() {
   const [result, setResult] = useState("");
@@ -31,6 +32,7 @@ export default function Home() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatting, setIsChatting] = useState(false);
+  const [characters, setCharacters] = useState<Character[]>([]);
 
   useEffect(() => {
     const savedProject = window.localStorage.getItem("helloai-project");
@@ -45,6 +47,8 @@ export default function Home() {
       setDescription(project.description || "");
       setChatMessages(project.chatMessages || []);
     }
+    const savedCharacters = window.localStorage.getItem("helloai-characters");
+    if (savedCharacters) setCharacters(JSON.parse(savedCharacters));
   }, []);
 
   useEffect(() => {
@@ -116,7 +120,7 @@ export default function Home() {
       const response = await fetch("/api/ai-video", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessName, description, script: result, scenes }),
+        body: JSON.stringify({ businessName, description, script: result, scenes, characters }),
       });
       const data = await response.json();
 
@@ -353,6 +357,7 @@ export default function Home() {
           <button className="nav-item active" type="button"><span>✦</span> Create</button>
           <a className="nav-item" href="/website"><span>▤</span> Website builder</a>
           <a className="nav-item" href="/image"><span>▧</span> Photo editor</a>
+          <a className="nav-item" href="/characters"><span>◉</span> Characters</a>
           <button className="nav-item" type="button"><span>◫</span> Projects</button>
           <button className="nav-item" type="button"><span>◌</span> Assets</button>
         </nav>

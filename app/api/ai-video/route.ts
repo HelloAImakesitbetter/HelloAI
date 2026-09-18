@@ -1,28 +1,30 @@
 type DialogueLine = { speaker: string; text: string };
-type CharacterConfig = { avatarId: string; voiceId?: string };
+type CharacterConfig = { name: string; avatarId: string; voiceId?: string };
 
 function parseDialogue(script: string): DialogueLine[] {
   return script.split(/\r?\n/).map((line) => line.match(/^\s*([^:]{1,40})\s*:\s*(.+)$/)).filter((match): match is RegExpMatchArray => Boolean(match)).map((match) => ({ speaker: match[1].trim(), text: match[2].trim() })).filter((line) => !/^(narrator|voiceover|scene|director)$/i.test(line.speaker));
 }
 
-function characterConfig(speaker: string): CharacterConfig | null {
+function characterConfig(speaker: string, selected: CharacterConfig[]) {
+  const selectedCharacter = selected.find((character) => character.name.toLowerCase() === speaker.toLowerCase());
+  if (selectedCharacter) return selectedCharacter;
   const key = speaker.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
   const avatarId = process.env[`HEYGEN_${key}_AVATAR_ID`];
   const voiceId = process.env[`HEYGEN_${key}_VOICE_ID`];
-  return avatarId ? { avatarId, ...(voiceId ? { voiceId } : {}) } : null;
+  return avatarId ? { name: speaker, avatarId, ...(voiceId ? { voiceId } : {}) } : null;
 }
 
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.HEYGEN_API_KEY;
-    const { businessName, script, description } = (await req.json()) as { businessName?: string; script?: string; description?: string };
+    const { businessName, script, description, characters } = (await req.json()) as { businessName?: string; script?: string; description?: string; characters?: CharacterConfig[] };
 
     if (!apiKey) throw new Error("HEYGEN_API_KEY is not configured");
     if (!script || typeof script !== "string") return Response.json({ error: "A script is required" }, { status: 400 });
 
     const dialogue = parseDialogue(script);
     const speakers = [...new Set(dialogue.map((line) => line.speaker))];
-    const segments = speakers.map((speaker) => ({ speaker, text: dialogue.filter((line) => line.speaker === speaker).map((line) => line.text).join(" "), config: characterConfig(speaker) }));
+    const segments = speakers.map((speaker) => ({ speaker, text: dialogue.filter((line) => line.speaker === speaker).map((line) => line.text).join(" "), config: characterConfig(speaker, characters || []) }));
     const missing = segments.filter((segment) => !segment.config).map((segment) => segment.speaker);
 
     if (missing.length > 0) {
