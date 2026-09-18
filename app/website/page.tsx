@@ -15,7 +15,7 @@ type WebsitePage = {
   closing: string;
 };
 type WebsiteDraft = { pages: WebsitePage[] };
-type Photo = { name: string; url: string };
+type Photo = { name: string; url: string; x: number; y: number };
 
 export default function WebsiteBuilderPage() {
   const [businessName, setBusinessName] = useState("");
@@ -25,6 +25,7 @@ export default function WebsiteBuilderPage() {
   const [photos, setPhotos] = useState<Record<string, Photo[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [draggingPhoto, setDraggingPhoto] = useState<{ pageSlug: string; name: string } | null>(null);
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
 
@@ -36,7 +37,7 @@ export default function WebsiteBuilderPage() {
       setBusinessName(data.businessName || "");
       setDescription(data.description || "");
       setDraft(data.draft || null);
-      setPhotos(data.photos || {});
+      setPhotos(Object.fromEntries(Object.entries(data.photos || {}).map(([slug, pagePhotos]) => [slug, (pagePhotos as Photo[]).map((photo, index) => ({ ...photo, x: photo.x ?? 5 + (index % 3) * 30, y: photo.y ?? 12 + Math.floor(index / 3) * 28 }))])));
     } catch { /* Ignore stale local drafts. */ }
   }, []);
 
@@ -71,7 +72,7 @@ export default function WebsiteBuilderPage() {
     const files = Array.from(event.target.files);
     files.forEach((file) => {
       const reader = new FileReader();
-      reader.onload = () => setPhotos((current) => ({ ...current, [selectedPage.slug]: [...(current[selectedPage.slug] || []), { name: file.name, url: String(reader.result) }] }));
+      reader.onload = () => setPhotos((current) => ({ ...current, [selectedPage.slug]: [...(current[selectedPage.slug] || []), { name: file.name, url: String(reader.result), x: 5 + ((current[selectedPage.slug] || []).length % 3) * 30, y: 12 + Math.floor((current[selectedPage.slug] || []).length / 3) * 28 }] }));
       reader.readAsDataURL(file);
     });
     event.target.value = "";
@@ -92,7 +93,7 @@ export default function WebsiteBuilderPage() {
             <div className="preview-nav"><strong>{businessName || selectedPage.title}</strong><span>{draft?.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage.slug ? "preview-nav-active" : ""} type="button" onClick={() => setSelectedSlug(page.slug)}>{page.label}</button>)}</span></div>
             <div className="preview-hero"><span className="preview-badge">{selectedPage.label.toUpperCase()}</span><h2>{selectedPage.title}</h2><p>{selectedPage.tagline}</p><div className="preview-actions"><button>{selectedPage.primaryCta}</button><button className="outline-button">{selectedPage.secondaryCta}</button></div></div>
             <div className="preview-intro"><p>{selectedPage.intro}</p></div>
-            {(photos[selectedPage.slug] || []).length > 0 && <div className="preview-photo-strip">{photos[selectedPage.slug].map((photo) => <img key={photo.name + photo.url} src={photo.url} alt={photo.name} />)}</div>}
+            {(photos[selectedPage.slug] || []).length > 0 && <div className="preview-photo-canvas" onPointerMove={(event) => { if (!draggingPhoto || draggingPhoto.pageSlug !== selectedPage.slug) return; const bounds = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(78, ((event.clientX - bounds.left) / bounds.width) * 100 - 10)); const y = Math.max(0, Math.min(78, ((event.clientY - bounds.top) / bounds.height) * 100 - 10)); setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug].map((photo) => photo.name === draggingPhoto.name ? { ...photo, x, y } : photo) })); }} onPointerUp={() => setDraggingPhoto(null)} onPointerLeave={() => setDraggingPhoto(null)}><span className="canvas-label">DRAG PHOTOS INTO PLACE</span>{photos[selectedPage.slug].map((photo) => <img key={photo.name + photo.url} src={photo.url} alt={photo.name} draggable={false} style={{ left: `${photo.x ?? 5}%`, top: `${photo.y ?? 12}%` }} onPointerDown={(event) => { event.preventDefault(); setDraggingPhoto({ pageSlug: selectedPage.slug, name: photo.name }); }} />)}</div>}
             <div className="preview-benefits">{selectedPage.benefits.map((benefit, index) => <article key={benefit + index}><span>0{index + 1}</span><h3>{benefit}</h3><p>Designed around what matters to your customers.</p></article>)}</div>
             <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div><div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
           </div> : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
