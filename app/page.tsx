@@ -108,7 +108,7 @@ export default function Home() {
   };
 
   const generateAiVideo = async () => {
-    if (!result || scenes.length === 0) {
+    if (!result) {
       return;
     }
 
@@ -394,7 +394,7 @@ export default function Home() {
                 <pre className="script-preview">{result}</pre>
                 <div className="tool-row">
                   <button type="button" onClick={generateScenes} disabled={isGeneratingScenes} className="secondary-button">▧ {isGeneratingScenes ? "Creating scenes..." : "Create scenes"}</button>
-                  <button type="button" onClick={generateAiVideo} disabled={isGeneratingAiVideo || scenes.length === 0} className="primary-button small">{isGeneratingAiVideo ? "Rendering..." : "Generate moving video  →"}</button>
+                  <button type="button" onClick={generateAiVideo} disabled={isGeneratingAiVideo} className="primary-button small">{isGeneratingAiVideo ? "Rendering..." : "Generate automated video  →"}</button>
                 </div>
                 {aiVideoStatus && <div className="progress-note">{aiVideoStatus}</div>}
               </section>

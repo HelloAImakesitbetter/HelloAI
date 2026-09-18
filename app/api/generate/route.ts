@@ -27,7 +27,7 @@ Business Name: ${businessName}
 Description:
 ${description}
 
-Write a 60-second marketing video dialogue for up to five distinct characters. ${characterRoster} Give each character a clear personality and role in the business or customer story. Use only this exact format, one spoken line per row:
+Write a 60-second marketing video dialogue for exactly ten distinct characters. ${characterRoster} If the roster has fewer than ten names, generate the remaining natural names. Give each character a clear personality and role in the business or customer story. Make every character speak at least once. Use only this exact format, one spoken line per row:
 Character name: spoken line
 
 Every character must speak at least once. Do not include a narrator, voiceover label, stage directions, scene descriptions, bracketed text, subtitles, logos, or on-screen text. Return only spoken dialogue rows.

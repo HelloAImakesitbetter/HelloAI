@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     if (!script || typeof script !== "string") return Response.json({ error: "A script is required" }, { status: 400 });
 
     const dialogue = parseDialogue(script);
-    const speakers = [...new Set(dialogue.map((line) => line.speaker))];
+    const speakers = [...new Set(dialogue.map((line) => line.speaker))].slice(0, 10);
     const catalog = await loadHeyGenCatalog(apiKey);
     if (catalog.avatars.length === 0 || catalog.voices.length === 0) {
       throw new Error("HeyGen returned no usable avatars or voices");
