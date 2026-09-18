@@ -10,6 +10,13 @@ export async function POST(req: Request) {
 
     const openai = new OpenAI({ apiKey });
     const { businessName, description } = await req.json();
+    const configuredCharacters = Object.keys(process.env)
+      .filter((key) => key.startsWith("HEYGEN_") && key.endsWith("_AVATAR_ID"))
+      .map((key) => key.replace(/^HEYGEN_/, "").replace(/_AVATAR_ID$/, "").replace(/_/g, " "))
+      .filter(Boolean);
+    const characterRoster = configuredCharacters.length
+      ? `The only available characters are: ${configuredCharacters.join(", ")}. Use these exact names and no others.`
+      : "Use customer-provided names, or choose names if none were provided.";
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
@@ -19,7 +26,7 @@ Business Name: ${businessName}
 Description:
 ${description}
 
-Write a 60-second marketing video dialogue for up to five distinct characters. If the customer provided character names in the request, use those exact names. If no names were provided, choose natural names that fit the characters. Give each character a clear personality and role in the business or customer story. Use only this exact format, one spoken line per row:
+Write a 60-second marketing video dialogue for up to five distinct characters. ${characterRoster} Give each character a clear personality and role in the business or customer story. Use only this exact format, one spoken line per row:
 Character name: spoken line
 
 Every character must speak at least once. Do not include a narrator, voiceover label, stage directions, scene descriptions, bracketed text, subtitles, logos, or on-screen text. Return only spoken dialogue rows.
