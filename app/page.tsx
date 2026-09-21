@@ -13,6 +13,15 @@ const quickTools = [
   { label: "Audio", icon: "◉", href: "/seo", tone: "cyan" },
   { label: "Carousels", icon: "▧", href: "/website", tone: "orange" },
 ];
+const searchItems = [
+  { label: "Website Builder", detail: "Create pages, services, FAQs, and booking paths", href: "/website" },
+  { label: "SEO Engine", detail: "Audit pages, find opportunities, and apply fixes", href: "/seo" },
+  { label: "Business Analyzer", detail: "See SEO, conversion, trust, and growth gaps", href: "/seo" },
+  { label: "Competitor Research", detail: "Compare gaps and discover pages to build", href: "/seo" },
+  { label: "Lead Generation", detail: "Create quote, booking, call, and contact paths", href: "/website" },
+  { label: "Scheduled Tasks", detail: "Manage recurring SEO and growth work", href: "/scheduled" },
+  { label: "Image Studio", detail: "Create and edit visual assets", href: "/image" },
+];
 
 export default function Home() {
   const [businessName, setBusinessName] = useState("Untitled workspace");
@@ -24,6 +33,8 @@ export default function Home() {
   const [recommendationHref, setRecommendationHref] = useState("/website");
   const [recommendationLabel, setRecommendationLabel] = useState("Open website builder");
   const [isThinking, setIsThinking] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const saved = window.localStorage.getItem("helloai-website-draft");
@@ -33,6 +44,15 @@ export default function Home() {
       setBusinessName(project.businessName || "Untitled workspace");
       setDraftCount(project.draft?.pages?.length || 0);
     } catch { /* Ignore stale browser data. */ }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setSearchOpen(true); }
+      if (event.key === "Escape") setSearchOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const submitTask = async () => {
@@ -60,7 +80,7 @@ export default function Home() {
     <main className="task-workspace-shell">
       <aside className="task-workspace-sidebar">
         <div className="task-brand"><span>H</span><strong>HelloAI</strong></div>
-        <button className="task-search" type="button">⌕ <span>Search</span><kbd>⌘ K</kbd></button>
+        <button className="task-search" type="button" onClick={() => setSearchOpen(true)}>⌕ <span>Search</span><kbd>⌘ K</kbd></button>
         <a className="task-new-button" href="/website">＋ New task</a>
         <nav className="task-nav"><a className="selected" href="/">⌂ <span>Home</span></a><a href="/website">▤ <span>Website Builder</span></a><a href="/seo">⌕ <span>SEO Engine</span></a><a href="/scheduled">◷ <span>Scheduled</span></a><a href="/seo">⌘ <span>Plugins</span></a><a href="/seo">▣ <span>Notetaker</span><em>Free</em></a><a href="/seo">••• <span>Explore</span></a></nav>
         <div className="task-sidebar-section"><span>Projects</span><button type="button">＋</button><p>No projects yet</p></div>
@@ -77,6 +97,7 @@ export default function Home() {
 
         <section className="task-bottom-grid"><article><span className="eyebrow">QUICK START</span><h2>Make the next useful thing.</h2><p>Start with the website builder or ask the growth agent to audit, plan, and prioritize your business.</p><div className="task-bottom-links"><a href="/website">Build a website →</a><a href="/seo">Grow my business →</a></div></article><article className="task-project-card"><span className="eyebrow">CURRENT PROJECT</span><strong>{businessName}</strong><p>{draftCount ? `${draftCount} website pages in your draft` : "No active project yet"}</p><a href="/website">Open project →</a></article></section>
       </section>
+      {searchOpen && <div className="task-search-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}><section className="task-search-dialog" role="dialog" aria-modal="true" aria-label="Search HelloAI"><div className="task-search-input-wrap"><span>⌕</span><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search HelloAI" /><kbd>Esc</kbd></div><div className="task-search-results">{searchItems.filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())).map((item) => <a key={item.label} href={item.href} onClick={() => setSearchOpen(false)}><span>→</span><div><strong>{item.label}</strong><small>{item.detail}</small></div></a>)}{searchItems.every((item) => !`${item.label} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())) && <p className="task-search-empty">No matching HelloAI feature found.</p>}</div></section></div>}
     </main>
   );
 }
