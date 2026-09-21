@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 type WebsitePage = {
   slug: string;
@@ -64,6 +65,7 @@ export default function WebsiteBuilderPage() {
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [refinementInstruction, setRefinementInstruction] = useState("");
   const [isRefining, setIsRefining] = useState(false);
+  const [accountUserId, setAccountUserId] = useState<string | null>(null);
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
   const seoTitleLength = selectedPage?.seoTitle?.length || 0;
@@ -71,24 +73,26 @@ export default function WebsiteBuilderPage() {
   const seoChecks = [seoTitleLength >= 30 && seoTitleLength <= 60, seoDescriptionLength >= 120 && seoDescriptionLength <= 160, Boolean(selectedPage?.title), Boolean(selectedPage?.primaryCta)].filter(Boolean).length;
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("helloai-website-draft");
-    if (!saved) return;
-    try {
-      const data = JSON.parse(saved) as { businessName?: string; description?: string; industry?: string; location?: string; phone?: string; email?: string; websiteUrl?: string; services?: string; audience?: string; tone?: string; primaryAction?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
-      setBusinessName(data.businessName || "");
-      setDescription(data.description || "");
-      setIndustry(data.industry || "");
-      setLocation(data.location || "");
-      setPhone(data.phone || "");
-      setEmail(data.email || "");
-      setWebsiteUrl(data.websiteUrl || "");
-      setServices(data.services || "");
-      setAudience(data.audience || "");
-      setTone(data.tone || "Clear, confident, and human");
-      setPrimaryAction(data.primaryAction || "Contact the business");
-      setDraft(data.draft || null);
-      setPhotos(Object.fromEntries(Object.entries(data.photos || {}).map(([slug, pagePhotos]) => [slug, (pagePhotos as Photo[]).map((photo, index) => ({ ...photo, x: photo.x ?? 5 + (index % 3) * 30, y: photo.y ?? 12 + Math.floor(index / 3) * 28 }))])));
-    } catch { /* Ignore stale local drafts. */ }
+    const loadProject = async () => {
+      const saved = window.localStorage.getItem("helloai-website-draft");
+      if (saved) {
+        try {
+          const data = JSON.parse(saved) as { businessName?: string; description?: string; industry?: string; location?: string; phone?: string; email?: string; websiteUrl?: string; services?: string; audience?: string; tone?: string; primaryAction?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
+          setBusinessName(data.businessName || ""); setDescription(data.description || ""); setIndustry(data.industry || ""); setLocation(data.location || ""); setPhone(data.phone || ""); setEmail(data.email || ""); setWebsiteUrl(data.websiteUrl || ""); setServices(data.services || ""); setAudience(data.audience || ""); setTone(data.tone || "Clear, confident, and human"); setPrimaryAction(data.primaryAction || "Contact the business"); setDraft(data.draft || null);
+          setPhotos(Object.fromEntries(Object.entries(data.photos || {}).map(([slug, pagePhotos]) => [slug, (pagePhotos as Photo[]).map((photo, index) => ({ ...photo, x: photo.x ?? 5 + (index % 3) * 30, y: photo.y ?? 12 + Math.floor(index / 3) * 28 }))])));
+        } catch { /* Ignore stale local drafts. */ }
+      }
+      if (!supabase) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
+      setAccountUserId(userId);
+      const { data } = await supabase.from("projects").select("payload").eq("user_id", userId).eq("kind", "website").maybeSingle();
+      if (!data?.payload) return;
+      const project = data.payload as Record<string, any>;
+      setBusinessName(project.businessName || ""); setDescription(project.description || ""); setIndustry(project.industry || ""); setLocation(project.location || ""); setPhone(project.phone || ""); setEmail(project.email || ""); setWebsiteUrl(project.websiteUrl || ""); setServices(project.services || ""); setAudience(project.audience || ""); setTone(project.tone || "Clear, confident, and human"); setPrimaryAction(project.primaryAction || "Contact the business"); setDraft(project.draft || null); setPhotos(project.photos || {});
+    };
+    void loadProject();
 
     const fixMarker = window.localStorage.getItem("helloai-website-autofix");
     if (fixMarker) {
@@ -102,8 +106,12 @@ export default function WebsiteBuilderPage() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("helloai-website-draft", JSON.stringify({ businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos }));
-  }, [businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos]);
+    const payload = { businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos };
+    window.localStorage.setItem("helloai-website-draft", JSON.stringify(payload));
+    if (supabase && accountUserId && (draft || businessName || description)) {
+      void supabase.from("projects").upsert({ user_id: accountUserId, kind: "website", name: businessName || "Website project", payload, updated_at: new Date().toISOString() }, { onConflict: "user_id,kind" });
+    }
+  }, [accountUserId, businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos]);
 
   useEffect(() => {
     if (!draft?.pages.length) return;
