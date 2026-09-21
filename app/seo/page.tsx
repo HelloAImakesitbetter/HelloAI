@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type SeoPage = { page: string; keyword: string; title: string; description: string; intent: string };
 type SeoReport = {
@@ -15,7 +15,8 @@ type SeoReport = {
   checklist: { task: string; priority: "High" | "Medium" | "Low"; reason: string }[];
 };
 type AuditIssue = { key: string; label: string; status: "pass" | "warning" | "fail"; detail: string; fix: string };
-type WebsiteAudit = { url: string; checkedAt: string; score: number; title: string; description: string; wordCount: number; issues: AuditIssue[] };
+type AuditedPage = { url: string; title: string; description: string; wordCount: number; score: number; issues: AuditIssue[] };
+type WebsiteAudit = { url: string; checkedAt: string; score: number; title: string; description: string; wordCount: number; pagesFound: number; pagesChecked: number; pages: AuditedPage[]; issues: AuditIssue[] };
 
 const issueImpact: Record<string, { label: string; score: number }> = {
   title: { label: "High revenue impact", score: 95 },
@@ -40,6 +41,17 @@ export default function SeoPage() {
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [reviewQueue, setReviewQueue] = useState<string[]>([]);
+  const [connectedSite, setConnectedSite] = useState("");
+  const [autoApplyFixes, setAutoApplyFixes] = useState(false);
+
+  useEffect(() => {
+    const savedSite = window.localStorage.getItem("helloai-seo-connected-site");
+    if (savedSite) {
+      setConnectedSite(savedSite);
+      setWebsiteUrl(savedSite);
+    }
+    setAutoApplyFixes(window.localStorage.getItem("helloai-seo-auto-fix") === "true");
+  }, []);
 
   const generateReport = async (event: FormEvent) => {
     event.preventDefault();
@@ -74,6 +86,9 @@ export default function SeoPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to audit website");
       setAudit(data.audit);
+      setConnectedSite(data.audit.url);
+      window.localStorage.setItem("helloai-seo-connected-site", data.audit.url);
+      setStatusMessage(`Connected to ${data.audit.url}. SEO checks are now linked to this site.`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to audit website");
     } finally {
@@ -93,9 +108,15 @@ export default function SeoPage() {
       const existingDraft = window.localStorage.getItem("helloai-website-draft");
       const parsedDraft = existingDraft ? JSON.parse(existingDraft) : { businessName: "", description: "", draft: null, photos: {} };
 
+      if (!parsedDraft?.draft?.pages?.length && !report?.pages?.length) {
+        setError("Build a HelloAI website draft before applying automatic SEO fixes.");
+        setStatusMessage("");
+        return;
+      }
+
       const relevantIssues = typeof issueKey === "string"
         ? (audit?.issues || []).filter((issue) => issue.key === issueKey && issue.status !== "pass")
-        : (audit?.issues || []).filter((issue) => reviewQueue.includes(issue.key) && issue.status !== "pass");
+        : (audit?.issues || []).filter((issue) => (autoApplyFixes || reviewQueue.includes(issue.key)) && issue.status !== "pass");
 
       if (!relevantIssues.length) {
         setStatusMessage("No SEO issues need fixing right now.");
@@ -185,6 +206,10 @@ export default function SeoPage() {
     }
   };
 
+  useEffect(() => {
+    if (autoApplyFixes && audit) applyAutoFixes();
+  }, [audit, autoApplyFixes]);
+
   const opportunityScore = report
     ? Math.min(99, Math.max(42, 48 + (report.priorityWins.length || 1) * 8 + (report.pages.length || 4) * 3 + report.checklist.filter((item) => item.priority === "High").length * 6))
     : 0;
@@ -220,7 +245,7 @@ export default function SeoPage() {
               <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Austin, Texas" />
             </label>
             <label>
-              Existing website <span className="optional-label">optional</span>
+              Website to connect
               <input value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://yourbusiness.com" />
             </label>
 
@@ -232,7 +257,7 @@ export default function SeoPage() {
                 {isLoading ? "Finding opportunities..." : "Build SEO plan →"}
               </button>
               <button className="secondary-button" type="button" onClick={auditWebsite} disabled={isAuditing || !websiteUrl.trim()}>
-                {isAuditing ? "Auditing site..." : "Audit live website"}
+                {isAuditing ? "Connecting and auditing..." : connectedSite ? "Re-check connected site" : "Connect and audit site"}
               </button>
               {audit && (
                 <button className="secondary-button" type="button" onClick={() => applyAutoFixes()} disabled={!reviewQueue.length}>
@@ -241,6 +266,19 @@ export default function SeoPage() {
               )}
             </div>
           </form>
+          <section className={`seo-connect-card ${connectedSite ? "connected" : ""}`}>
+            <span className="eyebrow">SITE CONNECTION</span>
+            <strong>{connectedSite ? "SEO is connected" : "Connect your live website"}</strong>
+            <p>{connectedSite ? connectedSite : "Add your public URL to scan every discoverable page, including pages outside your main navigation."}</p>
+            {connectedSite && <button type="button" className="seo-disconnect-button" onClick={() => { window.localStorage.removeItem("helloai-seo-connected-site"); setConnectedSite(""); setAudit(null); setWebsiteUrl(""); setStatusMessage("Website disconnected from this SEO workspace."); }}>Disconnect site</button>}
+          </section>
+          {connectedSite && <section className="seo-automation-card">
+            <span className="eyebrow">AUTOMATION MODE</span>
+            <label className="seo-toggle-row">
+              <span><strong>{autoApplyFixes ? "Automatic safe fixes" : "Review fixes first"}</strong><small>{autoApplyFixes ? "Metadata, headings, and content fixes apply to the HelloAI website draft after each audit." : "Choose each fix before it changes the HelloAI website draft."}</small></span>
+              <input type="checkbox" checked={autoApplyFixes} onChange={(event) => { const enabled = event.target.checked; setAutoApplyFixes(enabled); window.localStorage.setItem("helloai-seo-auto-fix", String(enabled)); }} />
+            </label>
+          </section>}
         </aside>
 
         <section className="seo-results">
@@ -376,9 +414,16 @@ export default function SeoPage() {
                 <strong>{audit.score}</strong>
                 <small>/100</small>
                 <p>{audit.url}</p>
+                <small>{audit.pagesChecked} of {audit.pagesFound} discovered pages checked</small>
                 <small className="seo-review-count">{reviewQueue.length} fix{reviewQueue.length === 1 ? "" : "es"} selected for review</small>
               </div>
               <div className="seo-audit-issues">
+                <div className="seo-audit-pages">
+                  <span className="eyebrow">DISCOVERED PAGES</span>
+                  {audit.pages.map((page) => (
+                    <div key={page.url}><span className={`audit-status audit-${page.score >= 80 ? "pass" : page.score >= 55 ? "warning" : "fail"}`}>{page.score}</span><a href={page.url} target="_blank" rel="noreferrer">{new URL(page.url).pathname || "/"}</a><small>{page.title || "Untitled page"}</small></div>
+                  ))}
+                </div>
                 {audit.issues.map((issue) => (
                   <article key={issue.key}>
                     <span className={`audit-status audit-${issue.status}`}>

@@ -128,6 +128,17 @@
 
 .seo-form-actions { display: grid; gap: 8px; margin-top: 6px; }
 .seo-form-actions .primary-button { margin-top: 0; }
+.seo-connect-card { margin-top: 18px; padding: 15px; border: 1px dashed #b9cdbf; border-radius: 9px; background: #f1f7f1; }
+.seo-connect-card strong { display: block; margin-top: 8px; font-size: 17px; font-weight: 400; }
+.seo-connect-card p { margin: 7px 0 0; color: var(--muted); font: 11px/1.45 Arial, sans-serif; overflow-wrap: anywhere; }
+.seo-connect-card.connected { border-style: solid; border-color: #9bc4a6; background: #e8f4e9; }
+.seo-disconnect-button { margin-top: 10px; border: 0; padding: 0; color: #8b4b3e; background: transparent; font: 700 10px Arial, sans-serif; }
+.seo-automation-card { margin-top: 10px; padding: 15px; border: 1px solid #dce5dc; border-radius: 9px; background: #fff; }
+.seo-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 9px; cursor: pointer; }
+.seo-toggle-row span { display: grid; gap: 4px; }
+.seo-toggle-row strong { font: 700 11px Arial, sans-serif; }
+.seo-toggle-row small { color: var(--muted); font: 10px/1.35 Arial, sans-serif; }
+.seo-toggle-row input { width: 17px; height: 17px; accent-color: var(--green); flex: 0 0 auto; }
 .seo-audit { display: grid; grid-template-columns: 165px 1fr; gap: 21px; margin-bottom: 13px; padding: 21px; border: 1px solid #dce5dc; border-radius: 10px; background: #fff; }
 .seo-audit-score { padding: 4px 0 0; }
 .seo-audit-score strong { display: inline-block; margin-top: 12px; color: var(--green); font: 400 52px Georgia, serif; letter-spacing: -.06em; }
@@ -149,6 +160,11 @@
 .seo-audit-issues .impact-high { color: #a44936; background: #ffebe6; }
 .manual-review-note { margin-top: 7px; color: #8a672a; }
 .seo-review-count { display: block; margin-top: 10px; color: var(--green) !important; }
+.seo-audit-pages { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #edf0ec; }
+.seo-audit-pages > span { display: block; margin-bottom: 7px; }
+.seo-audit-pages > div { display: grid; grid-template-columns: 25px minmax(75px, 1fr) 1.5fr; align-items: center; gap: 8px; padding: 5px 0; }
+.seo-audit-pages a { overflow: hidden; color: var(--green); font: 700 10px Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.seo-audit-pages small { overflow: hidden; color: var(--muted); font: 10px Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 600px) { .seo-audit { grid-template-columns: 1fr; } }
 
 :root {
