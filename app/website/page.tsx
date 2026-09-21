@@ -18,9 +18,24 @@ type WebsitePage = {
   seoDescription: string;
 };
 type WebsiteDraft = { pages: WebsitePage[]; growthPack?: { blogs: { title: string; keyword: string; outline: string }[]; localPages: string[]; faq: { question: string; answer: string }[] } };
-type Photo = { name: string; url: string; x: number; y: number };
+type Photo = { name: string; url: string; fallbackUrl?: string; x: number; y: number };
 type Provider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 type ProviderConnection = { id: string; provider: Provider; label: string };
+
+function getPhotoQuery(page: WebsitePage, businessDescription: string) {
+  const source = page.imagePrompt || `${page.label} ${businessDescription}`;
+  return source.replace(/[^a-zA-Z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 8).join(",");
+}
+
+function getFallbackPhoto(pageIndex: number) {
+  const fallbackPhotos = [
+    "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1556742049-0cf?auto=format&fit=crop&w=1200&q=80",
+  ];
+  return fallbackPhotos[pageIndex % fallbackPhotos.length].replace("?auto", "?auto");
+}
 
 export default function WebsiteBuilderPage() {
   const [businessName, setBusinessName] = useState("");
@@ -90,6 +105,19 @@ export default function WebsiteBuilderPage() {
     window.localStorage.setItem("helloai-website-draft", JSON.stringify({ businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos }));
   }, [businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos]);
 
+  useEffect(() => {
+    if (!draft?.pages.length) return;
+    setPhotos((current) => {
+      const next = { ...current };
+      draft.pages.forEach((page, index) => {
+        if (!next[page.slug]?.length) {
+          next[page.slug] = [{ name: `${page.label} editorial image`, url: `https://loremflickr.com/1200/800/${encodeURIComponent(getPhotoQuery(page, description))}?lock=${index + 1}`, fallbackUrl: getFallbackPhoto(index), x: 5, y: 12 }];
+        }
+      });
+      return next;
+    });
+  }, [draft, description]);
+
   const buildWebsite = async (event: FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
@@ -101,7 +129,7 @@ export default function WebsiteBuilderPage() {
       setDraft(data.draft);
       setSelectedSlug("home");
       setIsLoadingPhotos(true);
-      const generatedPhotos = Object.fromEntries(data.draft.pages.map((page: WebsitePage, index: number) => [page.slug, [{ name: `${page.label} editorial image`, url: `https://loremflickr.com/1200/800/${encodeURIComponent(page.imagePrompt || description.split(" ").slice(0, 4).join(","))}?lock=${index + 1}`, x: 5, y: 12 }]]));
+      const generatedPhotos = Object.fromEntries(data.draft.pages.map((page: WebsitePage, index: number) => [page.slug, [{ name: `${page.label} editorial image`, url: `https://loremflickr.com/1200/800/${encodeURIComponent(getPhotoQuery(page, description))}?lock=${index + 1}`, fallbackUrl: getFallbackPhoto(index), x: 5, y: 12 }]]));
       setPhotos((current) => ({ ...generatedPhotos, ...current }));
       setIsLoadingPhotos(false);
     } catch (requestError) {
@@ -180,7 +208,7 @@ export default function WebsiteBuilderPage() {
             <div className="preview-nav"><strong>{businessName || selectedPage.title}</strong><span>{draft?.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage.slug ? "preview-nav-active" : ""} type="button" onClick={() => setSelectedSlug(page.slug)}>{page.label}</button>)}</span></div>
             <div className="preview-hero"><span className="preview-badge">{selectedPage.label.toUpperCase()}</span><h2>{selectedPage.title}</h2><p>{selectedPage.tagline}</p><div className="preview-actions"><button>{selectedPage.primaryCta}</button><button className="outline-button">{selectedPage.secondaryCta}</button></div></div>
             <div className="preview-intro"><p>{selectedPage.intro}</p></div>
-            {(photos[selectedPage.slug] || []).length > 0 && <div className="preview-photo-canvas" onPointerMove={(event) => { if (!draggingPhoto || draggingPhoto.pageSlug !== selectedPage.slug) return; const bounds = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(78, ((event.clientX - bounds.left) / bounds.width) * 100 - 10)); const y = Math.max(0, Math.min(78, ((event.clientY - bounds.top) / bounds.height) * 100 - 10)); setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug].map((photo) => photo.name === draggingPhoto.name ? { ...photo, x, y } : photo) })); }} onPointerUp={() => setDraggingPhoto(null)} onPointerLeave={() => setDraggingPhoto(null)}><span className="canvas-label">DRAG PHOTOS INTO PLACE</span>{photos[selectedPage.slug].map((photo) => <img key={photo.name + photo.url} src={photo.url} alt={photo.name} draggable={false} style={{ left: `${photo.x ?? 5}%`, top: `${photo.y ?? 12}%` }} onPointerDown={(event) => { event.preventDefault(); setDraggingPhoto({ pageSlug: selectedPage.slug, name: photo.name }); }} />)}</div>}
+            {(photos[selectedPage.slug] || []).length > 0 && <div className="preview-photo-canvas" onPointerMove={(event) => { if (!draggingPhoto || draggingPhoto.pageSlug !== selectedPage.slug) return; const bounds = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(78, ((event.clientX - bounds.left) / bounds.width) * 100 - 10)); const y = Math.max(0, Math.min(78, ((event.clientY - bounds.top) / bounds.height) * 100 - 10)); setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug].map((photo) => photo.name === draggingPhoto.name ? { ...photo, x, y } : photo) })); }} onPointerUp={() => setDraggingPhoto(null)} onPointerLeave={() => setDraggingPhoto(null)}><span className="canvas-label">DRAG PHOTOS INTO PLACE</span>{photos[selectedPage.slug].map((photo) => <img key={photo.name + photo.url} src={photo.url} alt={photo.name} draggable={false} style={{ left: `${photo.x ?? 5}%`, top: `${photo.y ?? 12}%` }} onError={(event) => { const fallbackUrl = (photo as Photo & { fallbackUrl?: string }).fallbackUrl; if (fallbackUrl && event.currentTarget.src !== fallbackUrl) event.currentTarget.src = fallbackUrl; }} onPointerDown={(event) => { event.preventDefault(); setDraggingPhoto({ pageSlug: selectedPage.slug, name: photo.name }); }} />)}</div>}
             <div className="preview-benefits">{selectedPage.benefits.map((benefit, index) => <article key={benefit + index}><span>0{index + 1}</span><h3>{benefit}</h3><p>Designed around what matters to your customers.</p></article>)}</div>
             <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div><div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
           </div> : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
