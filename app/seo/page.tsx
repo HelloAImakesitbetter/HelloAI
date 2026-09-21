@@ -17,6 +17,17 @@ type SeoReport = {
 type AuditIssue = { key: string; label: string; status: "pass" | "warning" | "fail"; detail: string; fix: string };
 type AuditedPage = { url: string; title: string; description: string; wordCount: number; score: number; issues: AuditIssue[] };
 type WebsiteAudit = { url: string; checkedAt: string; score: number; title: string; description: string; wordCount: number; pagesFound: number; pagesChecked: number; pages: AuditedPage[]; issues: AuditIssue[] };
+type GrowthIntelligence = {
+  summary: string;
+  missingServicePages: { title: string; keyword: string; reason: string; priority: string }[];
+  locationPages: { title: string; keyword: string; localAngle: string; priority: string }[];
+  landingPages: { title: string; audience: string; offer: string; priority: string }[];
+  contentClusters: { topic: string; supportingArticles: string[] }[];
+  conversionFixes: { issue: string; fix: string; impact: string }[];
+  competitorGaps: { opportunity: string; whyItMatters: string; nextAction: string }[];
+  forecast: { currentMonthlyTraffic: number; estimatedMonthlyTraffic: number; assumptions: string[] };
+  autopilot: string[];
+};
 type PublishingProvider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 const publishingProviders: { id: PublishingProvider; name: string; description: string }[] = [
   { id: "wordpress", name: "WordPress", description: "REST API publishing" },
@@ -55,6 +66,9 @@ export default function SeoPage() {
   const [providerFields, setProviderFields] = useState<Record<string, string>>({});
   const [connectedProviders, setConnectedProviders] = useState<Record<string, string>>({});
   const [isConnectingProvider, setIsConnectingProvider] = useState(false);
+  const [competitorUrl, setCompetitorUrl] = useState("");
+  const [intelligence, setIntelligence] = useState<GrowthIntelligence | null>(null);
+  const [isGrowing, setIsGrowing] = useState(false);
 
   useEffect(() => {
     const savedSite = window.localStorage.getItem("helloai-seo-connected-site");
@@ -105,6 +119,22 @@ export default function SeoPage() {
       setError(requestError instanceof Error ? requestError.message : "Failed to audit website");
     } finally {
       setIsAuditing(false);
+    }
+  };
+
+  const growBusiness = async () => {
+    setIsGrowing(true);
+    setError("");
+    try {
+      const response = await fetch("/api/seo/intelligence", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, location, websiteUrl, competitorUrl, audit }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to build growth plan");
+      setIntelligence(data.intelligence);
+      setStatusMessage("Growth map ready: pages, content, conversion fixes, and an execution plan are prepared.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to build growth plan");
+    } finally {
+      setIsGrowing(false);
     }
   };
 
@@ -270,6 +300,10 @@ export default function SeoPage() {
             <label>
               What do you offer?
               <textarea required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe your service, ideal customer, and what makes you different..." />
+            <label>
+              Competitor website <span className="optional-label">optional</span>
+              <input value={competitorUrl} onChange={(event) => setCompetitorUrl(event.target.value)} placeholder="https://competitor.com" />
+            </label>
             </label>
             <label>
               Primary location
@@ -289,6 +323,9 @@ export default function SeoPage() {
               </button>
               <button className="secondary-button" type="button" onClick={auditWebsite} disabled={isAuditing || !websiteUrl.trim()}>
                 {isAuditing ? "Connecting and auditing..." : connectedSite ? "Re-check connected site" : "Connect and audit site"}
+              </button>
+              <button className="secondary-button grow-business-button" type="button" onClick={growBusiness} disabled={isGrowing || (!description.trim() && !websiteUrl.trim())}>
+                {isGrowing ? "Finding growth opportunities..." : "Grow my business"}
               </button>
               {audit && (
                 <button className="secondary-button" type="button" onClick={() => applyAutoFixes()} disabled={!reviewQueue.length}>
@@ -495,6 +532,17 @@ export default function SeoPage() {
                   </article>
                 ))}
               </div>
+            </section>
+          )}
+
+          {intelligence && (
+            <section className="seo-intelligence">
+              <div className="seo-intelligence-hero"><span className="eyebrow">AI SEO OPERATING SYSTEM</span><h2>{intelligence.summary}</h2><p>These are opportunities and estimates, not guaranteed rankings. Approve the actions you want HelloAI to execute.</p></div>
+              <div className="seo-intelligence-stats"><article><strong>{intelligence.missingServicePages.length}</strong><span>Service pages missing</span></article><article><strong>{intelligence.locationPages.length}</strong><span>Local pages to consider</span></article><article><strong>{intelligence.landingPages.length}</strong><span>Lead pages to build</span></article><article><strong>{intelligence.contentClusters.length}</strong><span>Content clusters</span></article></div>
+              <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">FIX EVERYTHING QUEUE</span></div><div className="seo-opportunity-grid">{[...intelligence.missingServicePages.map((item) => ({ title: item.title, meta: item.keyword, detail: item.reason })), ...intelligence.locationPages.map((item) => ({ title: item.title, meta: item.keyword, detail: item.localAngle })), ...intelligence.landingPages.map((item) => ({ title: item.title, meta: item.audience, detail: item.offer }))].slice(0, 12).map((item) => <article key={item.title}><span>Opportunity</span><h3>{item.title}</h3><strong>{item.meta}</strong><p>{item.detail}</p><button type="button" className="seo-fix-button">Add to build queue</button></article>)}</div></section>
+              <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">CONTENT CLUSTERS</span></div><div className="seo-cluster-list">{intelligence.contentClusters.map((cluster) => <article key={cluster.topic}><strong>{cluster.topic}</strong><p>{cluster.supportingArticles.join(" · ")}</p></article>)}</div></section>
+              <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">CONVERSION FIXES</span></div><div className="seo-checklist">{intelligence.conversionFixes.map((item) => <article key={item.issue}><span className="priority-tag">{item.impact}</span><div><strong>{item.issue}</strong><p>{item.fix}</p></div></article>)}</div></section>
+              <section className="seo-forecast"><div><span className="eyebrow">FORECAST, NOT A PROMISE</span><h3>{intelligence.forecast.currentMonthlyTraffic} → {intelligence.forecast.estimatedMonthlyTraffic} estimated monthly visits</h3><p>{intelligence.forecast.assumptions.join(" ")}</p></div><div><span className="eyebrow">AUTOPILOT RHYTHM</span>{intelligence.autopilot.map((step) => <p key={step}>✓ {step}</p>)}</div></section>
             </section>
           )}
         </section>
