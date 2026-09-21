@@ -31,13 +31,14 @@ export async function POST(req: Request) {
           typeof message.content === "string" &&
           message.content.trim().length > 0
       )
-      .slice(-12);
+      .slice(-8)
+      .map((message) => ({ ...message, content: message.content.trim().slice(0, 2400) }));
 
     if (safeMessages.length === 0) {
       return Response.json({ error: "A valid message is required" }, { status: 400 });
     }
 
-    const currentStage = progress || "brief only";
+    const currentStage = (progress || "brief only").slice(0, 240);
     const openai = new OpenAI({ apiKey });
     const response = await openai.responses.create({
       model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
@@ -59,8 +60,8 @@ Rules:
 - When a task needs an app action, explain exactly which existing button or stage to use next. Prefer one concrete recommendation over a long list.
 - Prefer concise answers with headings or short numbered steps. Avoid generic motivational language.
 
-Current project name: ${businessName || "Unnamed"}
-Customer brief: ${description || "Not provided"}
+Current project name: ${(businessName || "Unnamed").slice(0, 160)}
+Customer brief: ${(description || "Not provided").slice(0, 1600)}
 Completed stages: ${currentStage}
 Available workflow: website builder, AI page refinement, SEO audit, Grow My Business intelligence, provider connections, automatic SEO fixes, and website publishing preparation.`,
         },
