@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 
 type SeoPage = {
   page: string;
@@ -12,6 +12,8 @@ type SeoReport = {
   summary: string;
   primaryKeyword: string;
   secondaryKeywords: string[];
+  priorityWins: string[];
+  monthlyPlan: { month: string; focus: string; result: string }[];
   pages: SeoPage[];
   localActions: string[];
   contentIdeas: { title: string; keyword: string; format: string }[];
@@ -22,11 +24,23 @@ function parseReport(output: string) {
   const start = output.indexOf("{");
   const end = output.lastIndexOf("}");
   if (start === -1 || end < start) throw new Error("The AI returned an invalid SEO report");
-  const report = JSON.parse(output.slice(start, end + 1)) as SeoReport;
+
+  const report = JSON.parse(output.slice(start, end + 1)) as Partial<SeoReport>;
   if (!report.summary || !report.primaryKeyword || !Array.isArray(report.pages) || !Array.isArray(report.contentIdeas) || !Array.isArray(report.checklist)) {
     throw new Error("The AI returned an incomplete SEO report");
   }
-  return report;
+
+  return {
+    summary: report.summary,
+    primaryKeyword: report.primaryKeyword,
+    secondaryKeywords: Array.isArray(report.secondaryKeywords) ? report.secondaryKeywords : [],
+    priorityWins: Array.isArray(report.priorityWins) ? report.priorityWins : [],
+    monthlyPlan: Array.isArray(report.monthlyPlan) ? report.monthlyPlan : [],
+    pages: report.pages,
+    localActions: Array.isArray(report.localActions) ? report.localActions : [],
+    contentIdeas: report.contentIdeas,
+    checklist: report.checklist,
+  } as SeoReport;
 }
 
 export async function POST(req: Request) {
@@ -52,10 +66,29 @@ Location: ${location || "Not provided"}
 Website: ${websiteUrl || "Not provided"}
 Business description: ${description}
 
-Return only valid JSON with this exact shape:
-{"summary":"","primaryKeyword":"","secondaryKeywords":["","","","",""],"pages":[{"page":"Home","keyword":"","title":"","description":"","intent":""}],"localActions":["","","",""],"contentIdeas":[{"title":"","keyword":"","format":"Guide"}],"checklist":[{"task":"","priority":"High","reason":""}]}
+Return valid JSON only with this exact shape:
+{
+  "summary": "",
+  "primaryKeyword": "",
+  "secondaryKeywords": ["", "", "", "", ""],
+  "priorityWins": ["", "", ""],
+  "monthlyPlan": [
+    { "month": "Month 1", "focus": "", "result": "" },
+    { "month": "Month 2", "focus": "", "result": "" },
+    { "month": "Month 3", "focus": "", "result": "" }
+  ],
+  "pages": [
+    { "page": "Home", "keyword": "", "title": "", "description": "", "intent": "" },
+    { "page": "Services", "keyword": "", "title": "", "description": "", "intent": "" },
+    { "page": "About", "keyword": "", "title": "", "description": "", "intent": "" },
+    { "page": "Contact", "keyword": "", "title": "", "description": "", "intent": "" }
+  ],
+  "localActions": ["", "", "", ""],
+  "contentIdeas": [{ "title": "", "keyword": "", "format": "Guide" }],
+  "checklist": [{ "task": "", "priority": "High", "reason": "" }]
+}
 
-Create entries for Home, Services, About, and Contact. Use realistic search language, not invented search volume or rankings. Keep SEO titles under 60 characters and descriptions between 120 and 160 characters. Prioritize actions a small business can actually complete. Include location modifiers only when a location is provided. Make content ideas specific to the audience and offer.`,
+Create entries for Home, Services, About, and Contact. Use realistic search language, not invented search volume or rankings. Keep SEO titles under 60 characters and descriptions between 120 and 160 characters. Prioritize actions a small business can actually complete. Include location modifiers only when a location is provided. Make content ideas specific to the audience and offer. Focus on revenue-driving SEO actions, not generic marketing fluff.`,
     });
 
     return Response.json({ report: parseReport(response.output_text) });

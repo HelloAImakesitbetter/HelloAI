@@ -1,11 +1,32 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 
 type SeoPage = { page: string; keyword: string; title: string; description: string; intent: string };
-type SeoReport = { summary: string; primaryKeyword: string; secondaryKeywords: string[]; pages: SeoPage[]; localActions: string[]; contentIdeas: { title: string; keyword: string; format: string }[]; checklist: { task: string; priority: "High" | "Medium" | "Low"; reason: string }[] };
+type SeoReport = {
+  summary: string;
+  primaryKeyword: string;
+  secondaryKeywords: string[];
+  priorityWins: string[];
+  monthlyPlan: { month: string; focus: string; result: string }[];
+  pages: SeoPage[];
+  localActions: string[];
+  contentIdeas: { title: string; keyword: string; format: string }[];
+  checklist: { task: string; priority: "High" | "Medium" | "Low"; reason: string }[];
+};
 type AuditIssue = { key: string; label: string; status: "pass" | "warning" | "fail"; detail: string; fix: string };
 type WebsiteAudit = { url: string; checkedAt: string; score: number; title: string; description: string; wordCount: number; issues: AuditIssue[] };
+
+const issueImpact: Record<string, { label: string; score: number }> = {
+  title: { label: "High revenue impact", score: 95 },
+  description: { label: "High revenue impact", score: 90 },
+  h1: { label: "High revenue impact", score: 86 },
+  content: { label: "Growth impact", score: 74 },
+  technical: { label: "Growth impact", score: 68 },
+  crawl: { label: "Foundational impact", score: 62 },
+  images: { label: "Trust impact", score: 48 },
+};
+const autoFixableIssues = new Set(["title", "description", "h1", "content", "technical"]);
 
 export default function SeoPage() {
   const [businessName, setBusinessName] = useState("");
@@ -17,13 +38,19 @@ export default function SeoPage() {
   const [isAuditing, setIsAuditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [reviewQueue, setReviewQueue] = useState<string[]>([]);
 
   const generateReport = async (event: FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/seo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, location, websiteUrl }) });
+      const response = await fetch("/api/seo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessName, description, location, websiteUrl }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to generate SEO plan");
       setReport(data.report);
@@ -37,8 +64,13 @@ export default function SeoPage() {
   const auditWebsite = async () => {
     setIsAuditing(true);
     setError("");
+    setStatusMessage("");
     try {
-      const response = await fetch("/api/seo/audit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ websiteUrl }) });
+      const response = await fetch("/api/seo/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ websiteUrl }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to audit website");
       setAudit(data.audit);
@@ -49,5 +81,327 @@ export default function SeoPage() {
     }
   };
 
-  return <main className="seo-shell"><header className="seo-header"><a href="/" className="back-link">← HelloAI workspace</a><div className="seo-brand"><span className="eyebrow">GROWTH STUDIO</span><strong>Search visibility</strong></div><a className="secondary-button" href="/website">Open website builder</a></header><div className="seo-layout"><aside className="seo-brief"><span className="eyebrow">AI SEO STRATEGY</span><h1>Turn your website into a discovery engine.</h1><p>Get a focused SEO plan for your business, then audit the live site and turn gaps into actions.</p><form onSubmit={generateReport}><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HellowCleaners" /></label><label>What do you offer?<textarea required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe your service, ideal customer, and what makes you different..." /></label><label>Primary location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Austin, Texas" /></label><label>Existing website <span className="optional-label">optional</span><input value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://yourbusiness.com" /></label>{error && <div className="error-banner">{error}</div>}<div className="seo-form-actions"><button className="primary-button" type="submit" disabled={isLoading || !description.trim()}>{isLoading ? "Finding opportunities..." : "Build SEO plan →"}</button><button className="secondary-button" type="button" onClick={auditWebsite} disabled={isAuditing || !websiteUrl.trim()}>{isAuditing ? "Auditing site..." : "Audit live website"}</button></div></form></aside><section className="seo-results">{audit && <section className="seo-audit"><div className="seo-audit-score"><span className="eyebrow">LIVE SITE AUDIT</span><strong>{audit.score}</strong><small>/100</small><p>{audit.url}</p></div><div className="seo-audit-issues">{audit.issues.map((issue) => <article key={issue.key}><span className={`audit-status audit-${issue.status}`}>{issue.status === "pass" ? "✓" : issue.status === "warning" ? "!" : "×"}</span><div><strong>{issue.label}</strong><small>{issue.detail}</small><p>{issue.fix}</p></div></article>)}</div></section>}{report ? <><div className="seo-report-hero"><span className="eyebrow">YOUR GROWTH MAP</span><h2>{report.summary}</h2><div className="keyword-pill"><span>PRIMARY TARGET</span><strong>{report.primaryKeyword}</strong></div></div><div className="seo-summary-grid"><article><span className="eyebrow">SUPPORTING TERMS</span><div className="keyword-list">{report.secondaryKeywords.map((keyword) => <span key={keyword}>{keyword}</span>)}</div></article><article><span className="eyebrow">LOCAL SEARCH</span><ul>{report.localActions.map((action) => <li key={action}>{action}</li>)}</ul></article></div><section className="seo-section"><div className="seo-section-heading"><div><span className="eyebrow">PAGE-BY-PAGE</span><h2>Search-ready page plan</h2></div><span className="seo-count">{report.pages.length} pages</span></div><div className="seo-page-table">{report.pages.map((page) => <article key={page.page}><div className="seo-page-name"><strong>{page.page}</strong><small>{page.intent}</small></div><div><span className="target-keyword">{page.keyword}</span><h3>{page.title}</h3><p>{page.description}</p></div></article>)}</div></section><section className="seo-section"><div className="seo-section-heading"><div><span className="eyebrow">CONTENT ENGINE</span><h2>What to publish next</h2></div></div><div className="content-idea-grid">{report.contentIdeas.map((idea) => <article key={idea.title}><span>{idea.format}</span><h3>{idea.title}</h3><small>{idea.keyword}</small></article>)}</div></section><section className="seo-section"><div className="seo-section-heading"><div><span className="eyebrow">ACTION PLAN</span><h2>Prioritized checklist</h2></div></div><div className="seo-checklist">{report.checklist.map((item) => <article key={item.task}><span className={`priority-${item.priority.toLowerCase()}`}>{item.priority}</span><div><strong>{item.task}</strong><p>{item.reason}</p></div><button type="button" aria-label={`Mark ${item.task} complete`}>○</button></article>)}</div></section></> : !audit && <div className="seo-empty"><div>⌕</div><h2>Your growth map will appear here.</h2><p>Start with the business details on the left. HelloAI will connect your website, local search, and content into one clear plan.</p></div>}</section></div></main>;
+  const queueFix = (issueKey: string) => {
+    setReviewQueue((current) => current.includes(issueKey) ? current.filter((key) => key !== issueKey) : [...current, issueKey]);
+    setStatusMessage("");
+    setError("");
+  };
+
+  const applyAutoFixes = (issueKey?: string) => {
+    if (!audit && !report) return;
+    try {
+      const existingDraft = window.localStorage.getItem("helloai-website-draft");
+      const parsedDraft = existingDraft ? JSON.parse(existingDraft) : { businessName: "", description: "", draft: null, photos: {} };
+
+      const relevantIssues = typeof issueKey === "string"
+        ? (audit?.issues || []).filter((issue) => issue.key === issueKey && issue.status !== "pass")
+        : (audit?.issues || []).filter((issue) => reviewQueue.includes(issue.key) && issue.status !== "pass");
+
+      if (!relevantIssues.length) {
+        setStatusMessage("No SEO issues need fixing right now.");
+        setError("");
+        return;
+      }
+
+      const primaryKeyword = report?.primaryKeyword || (description ? description.split(" ").slice(0, 3).join(" ") : "local service");
+      const businessLabel = businessName || "Business";
+      const localSuffix = location ? ` in ${location}` : "";
+      const seoBaseIntro = report?.summary || `${businessLabel} helps local customers find the right solution faster with clear service information, trusted expertise, and a simple path to action.`;
+
+      const fallbackPages = report?.pages?.map((page) => ({
+        slug: page.page.toLowerCase().replace(/\s+/g, "-"),
+        label: page.page,
+        title: page.title || `${businessLabel} ${page.page}${localSuffix}`,
+        tagline: page.keyword ? `${page.keyword}${localSuffix}` : `Trusted ${primaryKeyword}${localSuffix}`,
+        intro: page.description || `${businessLabel} helps local customers find practical ${page.keyword || primaryKeyword} solutions with clear guidance and a fast path to action.`,
+        primaryCta: "Book a consultation",
+        secondaryCta: "View services",
+        benefits: ["Clear service information", "Local trust and proof", "Fast next steps"],
+        steps: ["Understand your needs", "Review the right plan", "Take action confidently"],
+        closing: `Ready to get started with ${businessLabel}?`,
+        seoTitle: page.title || `${businessLabel} ${page.page}${localSuffix}`,
+        seoDescription: page.description || `${businessLabel} provides helpful local ${page.keyword || primaryKeyword} guidance and a simple way to get started with confidence.`,
+      })) || [];
+
+      const draftPages = Array.isArray(parsedDraft?.draft?.pages) && parsedDraft.draft.pages.length ? parsedDraft.draft.pages : fallbackPages;
+      const fixedPages = draftPages.map((page: any, index: number) => {
+        const promptPage = report?.pages?.[index] || report?.pages?.[0] || null;
+        const serviceKeyword = (promptPage?.keyword || page.keyword || primaryKeyword || "service").trim();
+        const pageTitle = `${businessLabel} ${page.label || promptPage?.page || "Services"}${localSuffix}`;
+        const pageIntro = `${businessLabel} helps local customers find practical ${serviceKeyword} solutions with clear guidance, strong service details, and an easy next step to contact the team.`;
+        const seoDescription = `${businessLabel} provides local ${serviceKeyword} support with transparent pricing, clear service details, and a simple way to get started when customers are ready.`;
+
+        const issueHints = new Set(relevantIssues.map((item) => item.key));
+        const titleFix = issueHints.has("title") ? pageTitle : (page.title || pageTitle);
+        const descriptionFix = issueHints.has("description") ? seoDescription : (page.seoDescription || seoDescription);
+        const headingFix = issueHints.has("h1") ? pageTitle : (page.title || pageTitle);
+        const contentFix = issueHints.has("content") ? pageIntro : (page.intro || pageIntro);
+        const technicalFix = issueHints.has("technical") ? seoDescription : (page.seoDescription || seoDescription);
+
+        const fixedTitle = titleFix.length > 60 ? titleFix.slice(0, 57).trimEnd() + "..." : titleFix;
+        const fixedSeoTitle = (page.seoTitle || titleFix || pageTitle).length > 60 ? ((page.seoTitle || titleFix || pageTitle).slice(0, 57).trimEnd() + "...") : (page.seoTitle || titleFix || pageTitle);
+        const fixedSeoDescription = (descriptionFix || technicalFix || page.seoDescription || seoDescription).length > 160 ? ((descriptionFix || technicalFix || page.seoDescription || seoDescription).slice(0, 157).trimEnd() + "...") : (descriptionFix || technicalFix || page.seoDescription || seoDescription);
+        const fixedIntro = (contentFix || page.intro || pageIntro).length > 220 ? (contentFix || page.intro || pageIntro).slice(0, 217).trimEnd() + "..." : (contentFix || page.intro || pageIntro);
+        const nextTagline = (page.tagline || `${serviceKeyword}${localSuffix}` || `Trusted ${serviceKeyword}${localSuffix}`).trim();
+        const nextBenefits = Array.isArray(page.benefits) && page.benefits.length ? page.benefits : ["Clear service information", "Strong local trust", "Fast contact options"];
+        const nextSteps = Array.isArray(page.steps) && page.steps.length ? page.steps : ["Understand your needs", "Review the best option", "Move forward with confidence"];
+        const nextClosing = (page.closing || `Ready to start with ${businessLabel}?`).trim();
+        const nextPrimaryCta = (page.primaryCta || "Book a consultation").trim();
+        const nextSecondaryCta = (page.secondaryCta || "View services").trim();
+
+        return {
+          ...page,
+          title: fixedTitle,
+          tagline: nextTagline,
+          intro: fixedIntro,
+          primaryCta: nextPrimaryCta,
+          secondaryCta: nextSecondaryCta,
+          benefits: nextBenefits.map((value: string, valueIndex: number) => value && value.trim() ? value : ["Clear service information", "Strong local trust", "Fast contact options"][valueIndex]),
+          steps: nextSteps.map((value: string, valueIndex: number) => value && value.trim() ? value : ["Understand your needs", "Review the best option", "Move forward with confidence"][valueIndex]),
+          closing: nextClosing,
+          seoTitle: fixedSeoTitle,
+          seoDescription: fixedSeoDescription,
+          h1: headingFix,
+        };
+      });
+
+      const nextDraft = { pages: fixedPages };
+      const savedWebsite = {
+        ...parsedDraft,
+        businessName: parsedDraft.businessName || businessName,
+        description: parsedDraft.description || description,
+        draft: nextDraft,
+        photos: parsedDraft.photos || {},
+      };
+
+      window.localStorage.setItem("helloai-website-draft", JSON.stringify(savedWebsite));
+      const issueSummary = relevantIssues.map((issue) => issue.label).slice(0, 3).join(", ") || "SEO metadata and page structure";
+      window.localStorage.setItem("helloai-website-autofix", JSON.stringify({ updatedAt: new Date().toISOString(), summary: issueSummary }));
+      setStatusMessage(`Auto-fixed website issues: ${issueSummary}. The website builder has been updated.`);
+      setReviewQueue((current) => current.filter((key) => !relevantIssues.some((issue) => issue.key === key)));
+      setError("");
+    } catch (requestError) {
+      setError("Auto-fix could not be applied. Please try again.");
+    }
+  };
+
+  const opportunityScore = report
+    ? Math.min(99, Math.max(42, 48 + (report.priorityWins.length || 1) * 8 + (report.pages.length || 4) * 3 + report.checklist.filter((item) => item.priority === "High").length * 6))
+    : 0;
+
+  return (
+    <main className="seo-shell">
+      <header className="seo-header">
+        <a href="/" className="back-link">← HelloAI workspace</a>
+        <div className="seo-brand">
+          <span className="eyebrow">GROWTH STUDIO</span>
+          <strong>Search visibility</strong>
+        </div>
+        <a className="secondary-button" href="/website">Open website builder</a>
+      </header>
+
+      <div className="seo-layout">
+        <aside className="seo-brief">
+          <span className="eyebrow">AI SEO STRATEGY</span>
+          <h1>Turn your website into a discovery engine.</h1>
+          <p>Get a revenue-focused SEO plan, then audit the live site and turn gaps into concrete actions.</p>
+
+          <form onSubmit={generateReport}>
+            <label>
+              Business name
+              <input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HellowCleaners" />
+            </label>
+            <label>
+              What do you offer?
+              <textarea required value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Describe your service, ideal customer, and what makes you different..." />
+            </label>
+            <label>
+              Primary location
+              <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Austin, Texas" />
+            </label>
+            <label>
+              Existing website <span className="optional-label">optional</span>
+              <input value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://yourbusiness.com" />
+            </label>
+
+            {error && <div className="error-banner">{error}</div>}
+            {statusMessage && <div className="success-banner">{statusMessage}</div>}
+
+            <div className="seo-form-actions">
+              <button className="primary-button" type="submit" disabled={isLoading || !description.trim()}>
+                {isLoading ? "Finding opportunities..." : "Build SEO plan →"}
+              </button>
+              <button className="secondary-button" type="button" onClick={auditWebsite} disabled={isAuditing || !websiteUrl.trim()}>
+                {isAuditing ? "Auditing site..." : "Audit live website"}
+              </button>
+              {audit && (
+                <button className="secondary-button" type="button" onClick={() => applyAutoFixes()} disabled={!reviewQueue.length}>
+                  Apply {reviewQueue.length || "selected"} reviewed fixes
+                </button>
+              )}
+            </div>
+          </form>
+        </aside>
+
+        <section className="seo-results">
+          {!report && !audit && (
+            <div className="seo-empty">
+              <div>⌕</div>
+              <h2>Search strategy in one place</h2>
+              <p>Build a local SEO plan for your business and review the live site health before publishing new pages.</p>
+            </div>
+          )}
+
+          {report && (
+            <>
+              <section className="seo-report-hero">
+                <div className="seo-hero-copy">
+                  <span className="eyebrow">COMPETITIVE EDGE</span>
+                  <h2>{report.primaryKeyword}</h2>
+                  <p>{report.summary}</p>
+                </div>
+                <div className="seo-opportunity">
+                  <span>Opportunity</span>
+                  <strong>{opportunityScore}</strong>
+                  <small>/100</small>
+                </div>
+              </section>
+
+              <div className="seo-summary-grid">
+                <article className="seo-summary-card">
+                  <span className="eyebrow">PRIMARY FOCUS</span>
+                  <strong>{report.primaryKeyword}</strong>
+                  <small>Best keyword to anchor your site around.</small>
+                </article>
+                <article className="seo-summary-card">
+                  <span className="eyebrow">SUPPORTING TERMS</span>
+                  <strong>{report.secondaryKeywords.slice(0, 3).join(" • ") || "Local intent keywords"}</strong>
+                  <small>Secondary targets for topical depth.</small>
+                </article>
+                <article className="seo-summary-card">
+                  <span className="eyebrow">LOCAL ACTIONS</span>
+                  <strong>{report.localActions.length}</strong>
+                  <small>Quick wins you can complete this week.</small>
+                </article>
+              </div>
+
+              <section className="seo-section">
+                <div className="section-heading">
+                  <span className="eyebrow">PRIORITY WINS</span>
+                </div>
+                <ul className="seo-priority-list">
+                  {report.priorityWins.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="seo-section">
+                <div className="section-heading">
+                  <span className="eyebrow">90-DAY PLAN</span>
+                </div>
+                <div className="seo-plan-grid">
+                  {report.monthlyPlan.map((plan) => (
+                    <article key={plan.month} className="seo-plan-item">
+                      <span>{plan.month}</span>
+                      <strong>{plan.focus}</strong>
+                      <p>{plan.result}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="seo-section">
+                <div className="section-heading">
+                  <span className="eyebrow">PAGE STRATEGY</span>
+                </div>
+                <div className="seo-page-table">
+                  {report.pages.map((page) => (
+                    <article key={page.page} className="seo-page-row">
+                      <div className="seo-page-header">
+                        <span>{page.page}</span>
+                        <small>{page.keyword}</small>
+                      </div>
+                      <div className="seo-page-summary">
+                        <strong>{page.title}</strong>
+                        <p>{page.description}</p>
+                      </div>
+                      <div className="seo-page-intent">
+                        <span>Intent</span>
+                        <b>{page.intent}</b>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="seo-section">
+                <div className="section-heading">
+                  <span className="eyebrow">CONTENT IDEAS</span>
+                </div>
+                <div className="content-idea-grid">
+                  {report.contentIdeas.map((idea) => (
+                    <article key={`${idea.title}-${idea.keyword}`} className="content-idea-card">
+                      <span>{idea.format}</span>
+                      <h3>{idea.title}</h3>
+                      <p>{idea.keyword}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="seo-section">
+                <div className="section-heading">
+                  <span className="eyebrow">ACTION CHECKLIST</span>
+                </div>
+                <div className="seo-checklist">
+                  {report.checklist.map((item) => (
+                    <article key={item.task} className={`seo-checklist-item ${item.priority.toLowerCase()}`}>
+                      <span className="priority-tag">{item.priority}</span>
+                      <div>
+                        <strong>{item.task}</strong>
+                        <p>{item.reason}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+
+          {audit && (
+            <section className="seo-audit">
+              <div className="seo-audit-score">
+                <span className="eyebrow">LIVE SITE AUDIT</span>
+                <strong>{audit.score}</strong>
+                <small>/100</small>
+                <p>{audit.url}</p>
+                <small className="seo-review-count">{reviewQueue.length} fix{reviewQueue.length === 1 ? "" : "es"} selected for review</small>
+              </div>
+              <div className="seo-audit-issues">
+                {audit.issues.map((issue) => (
+                  <article key={issue.key}>
+                    <span className={`audit-status audit-${issue.status}`}>
+                      {issue.status === "pass" ? "✓" : issue.status === "warning" ? "!" : "×"}
+                    </span>
+                    <div>
+                      <strong>{issue.label} {issue.status !== "pass" && <em className={`impact-${issueImpact[issue.key]?.score >= 85 ? "high" : "medium"}`}>{issueImpact[issue.key]?.label || "Growth impact"}</em>}</strong>
+                      <small>{issue.detail}</small>
+                      <p>{issue.fix}</p>
+                      {issue.status !== "pass" && autoFixableIssues.has(issue.key) && (
+                        <button type="button" className={`seo-fix-button ${reviewQueue.includes(issue.key) ? "selected" : ""}`} onClick={() => queueFix(issue.key)}>
+                          {reviewQueue.includes(issue.key) ? "Selected for review" : "Review fix"}
+                        </button>
+                      )}
+                      {issue.status !== "pass" && !autoFixableIssues.has(issue.key) && <small className="manual-review-note">Manual review required in your website host</small>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }

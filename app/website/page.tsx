@@ -27,6 +27,7 @@ export default function WebsiteBuilderPage() {
   const [photos, setPhotos] = useState<Record<string, Photo[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [autoFixNotice, setAutoFixNotice] = useState("");
   const [draggingPhoto, setDraggingPhoto] = useState<{ pageSlug: string; name: string } | null>(null);
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
@@ -44,6 +45,16 @@ export default function WebsiteBuilderPage() {
       setDraft(data.draft || null);
       setPhotos(Object.fromEntries(Object.entries(data.photos || {}).map(([slug, pagePhotos]) => [slug, (pagePhotos as Photo[]).map((photo, index) => ({ ...photo, x: photo.x ?? 5 + (index % 3) * 30, y: photo.y ?? 12 + Math.floor(index / 3) * 28 }))])));
     } catch { /* Ignore stale local drafts. */ }
+
+    const fixMarker = window.localStorage.getItem("helloai-website-autofix");
+    if (fixMarker) {
+      try {
+        const parsedFix = JSON.parse(fixMarker) as { summary?: string };
+        setAutoFixNotice(parsedFix.summary ? `SEO auto-fix applied: ${parsedFix.summary}.` : "SEO auto-fix applied to your website draft.");
+      } catch {
+        setAutoFixNotice("SEO auto-fix applied to your website draft.");
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -90,7 +101,7 @@ export default function WebsiteBuilderPage() {
         <section className="website-brief-panel">
           <span className="eyebrow">BUILD A COMPLETE SITE</span><h1>Shape every page before it goes live.</h1>
           <p>Generate a site map, review pages one by one, edit the copy, and add your own photos to each page.</p>
-          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" /></label><label>Website brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label>{error && <div className="error-banner">{error}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building site map..." : "Build website draft  →"}</button></form>
+          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" /></label><label>Website brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label>{error && <div className="error-banner">{error}</div>}{autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building site map..." : "Build website draft  →"}</button></form>
           {draft && <div className="page-review-panel"><span className="eyebrow">PAGES TO REVIEW</span>{draft.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage?.slug ? "page-tab selected" : "page-tab"} type="button" onClick={() => setSelectedSlug(page.slug)}><span>{page.label}</span><small>Review and edit</small><b>→</b></button>)}</div>}
         </section>
         <section className="website-preview-frame">
