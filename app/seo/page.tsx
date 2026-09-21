@@ -17,6 +17,14 @@ type SeoReport = {
 type AuditIssue = { key: string; label: string; status: "pass" | "warning" | "fail"; detail: string; fix: string };
 type AuditedPage = { url: string; title: string; description: string; wordCount: number; score: number; issues: AuditIssue[] };
 type WebsiteAudit = { url: string; checkedAt: string; score: number; title: string; description: string; wordCount: number; pagesFound: number; pagesChecked: number; pages: AuditedPage[]; issues: AuditIssue[] };
+type PublishingProvider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
+const publishingProviders: { id: PublishingProvider; name: string; description: string }[] = [
+  { id: "wordpress", name: "WordPress", description: "REST API publishing" },
+  { id: "shopify", name: "Shopify", description: "Admin API publishing" },
+  { id: "webflow", name: "Webflow", description: "Site API publishing" },
+  { id: "github-vercel", name: "GitHub / Vercel", description: "Repository deployment" },
+  { id: "custom", name: "Custom CMS", description: "Your CMS API" },
+];
 
 const issueImpact: Record<string, { label: string; score: number }> = {
   title: { label: "High revenue impact", score: 95 },
@@ -43,6 +51,10 @@ export default function SeoPage() {
   const [reviewQueue, setReviewQueue] = useState<string[]>([]);
   const [connectedSite, setConnectedSite] = useState("");
   const [autoApplyFixes, setAutoApplyFixes] = useState(false);
+  const [provider, setProvider] = useState<PublishingProvider>("wordpress");
+  const [providerFields, setProviderFields] = useState<Record<string, string>>({});
+  const [connectedProviders, setConnectedProviders] = useState<Record<string, string>>({});
+  const [isConnectingProvider, setIsConnectingProvider] = useState(false);
 
   useEffect(() => {
     const savedSite = window.localStorage.getItem("helloai-seo-connected-site");
@@ -101,6 +113,25 @@ export default function SeoPage() {
     setStatusMessage("");
     setError("");
   };
+
+  const connectProvider = async () => {
+    setIsConnectingProvider(true);
+    setError("");
+    setStatusMessage("");
+    try {
+      const response = await fetch("/api/seo/connections", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, ...providerFields }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Provider connection failed");
+      setConnectedProviders((current) => ({ ...current, [provider]: data.label }));
+      setStatusMessage(data.detail);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Provider connection failed");
+    } finally {
+      setIsConnectingProvider(false);
+    }
+  };
+
+  const setProviderField = (key: string, value: string) => setProviderFields((current) => ({ ...current, [key]: value }));
 
   const applyAutoFixes = (issueKey?: string) => {
     if (!audit && !report) return;
@@ -279,6 +310,27 @@ export default function SeoPage() {
               <input type="checkbox" checked={autoApplyFixes} onChange={(event) => { const enabled = event.target.checked; setAutoApplyFixes(enabled); window.localStorage.setItem("helloai-seo-auto-fix", String(enabled)); }} />
             </label>
           </section>}
+          <section className="seo-publishing-card">
+            <span className="eyebrow">PUBLISHING CONNECTIONS</span>
+            <strong>Connect your site platform</strong>
+            <p>Verify a publishing account so approved SEO patches can be sent to the right system. Tokens are sent to the server only and are not saved in this browser.</p>
+            <div className="seo-provider-list">
+              {publishingProviders.map((item) => <button key={item.id} type="button" className={`seo-provider-option ${provider === item.id ? "active" : ""}`} onClick={() => setProvider(item.id)}><span><strong>{item.name}</strong><small>{item.description}</small></span><b>{connectedProviders[item.id] ? "Connected" : "Connect"}</b></button>)}
+            </div>
+            <select value={provider} onChange={(event) => setProvider(event.target.value as PublishingProvider)}>
+              <option value="wordpress">WordPress REST API</option>
+              <option value="shopify">Shopify Admin API</option>
+              <option value="webflow">Webflow API</option>
+              <option value="github-vercel">GitHub / Vercel deployment</option>
+              <option value="custom">Custom CMS API</option>
+            </select>
+            {provider === "wordpress" && <><input placeholder="WordPress site URL" value={providerFields.baseUrl || ""} onChange={(event) => setProviderField("baseUrl", event.target.value)} /><input type="password" placeholder="Application access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}
+            {provider === "shopify" && <><input placeholder="store.myshopify.com" value={providerFields.shopDomain || ""} onChange={(event) => setProviderField("shopDomain", event.target.value)} /><input type="password" placeholder="Admin API access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}
+            {provider === "webflow" && <><input placeholder="Webflow site ID" value={providerFields.siteId || ""} onChange={(event) => setProviderField("siteId", event.target.value)} /><input type="password" placeholder="Webflow API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}
+            {provider === "github-vercel" && <><input placeholder="owner/repository" value={providerFields.repository || ""} onChange={(event) => setProviderField("repository", event.target.value)} /><input placeholder="Vercel project name" value={providerFields.vercelProject || ""} onChange={(event) => setProviderField("vercelProject", event.target.value)} /><input type="password" placeholder="GitHub or deployment token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}
+            {provider === "custom" && <><input placeholder="Custom CMS verification endpoint" value={providerFields.endpoint || ""} onChange={(event) => setProviderField("endpoint", event.target.value)} /><input type="password" placeholder="CMS API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}
+            <button className="secondary-button" type="button" onClick={connectProvider} disabled={isConnectingProvider}>{isConnectingProvider ? "Verifying connection..." : connectedProviders[provider] ? `Connected: ${connectedProviders[provider]}` : "Verify and connect"}</button>
+          </section>
         </aside>
 
         <section className="seo-results">

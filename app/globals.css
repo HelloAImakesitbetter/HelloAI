@@ -139,6 +139,17 @@
 .seo-toggle-row strong { font: 700 11px Arial, sans-serif; }
 .seo-toggle-row small { color: var(--muted); font: 10px/1.35 Arial, sans-serif; }
 .seo-toggle-row input { width: 17px; height: 17px; accent-color: var(--green); flex: 0 0 auto; }
+.seo-publishing-card { display: grid; gap: 8px; margin-top: 10px; padding: 15px; border: 1px solid #dce5dc; border-radius: 9px; background: #fff; }
+.seo-publishing-card strong { font-size: 17px; font-weight: 400; }
+.seo-publishing-card p { margin: 0; color: var(--muted); font: 10px/1.4 Arial, sans-serif; }
+.seo-publishing-card input, .seo-publishing-card select { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 9px; color: var(--ink); background: #fbfcfa; font: 11px Arial, sans-serif; }
+.seo-provider-list { display: grid; gap: 5px; }
+.seo-provider-option { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 9px; color: var(--ink); background: #fbfcfa; text-align: left; }
+.seo-provider-option.active { border-color: var(--green); background: var(--mint); }
+.seo-provider-option span { display: grid; gap: 2px; }
+.seo-provider-option strong { font: 700 11px Arial, sans-serif; }
+.seo-provider-option small { color: var(--muted); font: 10px Arial, sans-serif; }
+.seo-provider-option b { color: var(--green); font: 700 9px Arial, sans-serif; text-transform: uppercase; }
 .seo-audit { display: grid; grid-template-columns: 165px 1fr; gap: 21px; margin-bottom: 13px; padding: 21px; border: 1px solid #dce5dc; border-radius: 10px; background: #fff; }
 .seo-audit-score { padding: 4px 0 0; }
 .seo-audit-score strong { display: inline-block; margin-top: 12px; color: var(--green); font: 400 52px Georgia, serif; letter-spacing: -.06em; }
