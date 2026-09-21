@@ -246,10 +246,17 @@ button { cursor: pointer; }
 .website-publishing-panel strong { font-size: 18px; font-weight: 400; }
 .website-publishing-panel p { margin: 0 0 3px; color: var(--muted); font: 10px/1.4 Arial, sans-serif; }
 .website-publishing-panel input, .website-publishing-panel select { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 9px; color: var(--ink); background: #fff; font: 11px Arial, sans-serif; }
+.growth-pack-panel { display: grid; gap: 8px; margin-top: 18px; padding: 15px; border: 1px solid #cbded2; border-radius: 8px; background: #fff; }
+.growth-pack-panel strong { font-size: 16px; font-weight: 400; }
+.growth-pack-panel p { display: grid; gap: 2px; margin: 0; padding-top: 7px; border-top: 1px solid #edf0ec; }
+.growth-pack-panel p b { font: 700 11px Arial, sans-serif; }
+.growth-pack-panel p small { color: var(--muted); font: 10px Arial, sans-serif; }
 .website-connection-list { display: grid; gap: 5px; max-height: 180px; overflow: auto; }
 .website-connection-list div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border: 1px solid #cbded2; border-radius: 6px; background: #fff; }
 .website-connection-list span { color: var(--green); font: 700 11px Arial, sans-serif; }
 .website-connection-list small { color: var(--muted); font: 10px Arial, sans-serif; }
+.ai-refine-panel { display: grid; gap: 8px; margin: 0 0 16px; padding: 12px; border: 1px solid #cbded2; border-radius: 7px; background: #f4f8f3; }
+.ai-refine-panel textarea { min-height: 70px; border: 1px solid var(--line); border-radius: 6px; padding: 9px; color: var(--ink); background: #fff; font: 11px/1.4 Arial, sans-serif; resize: vertical; }
 .page-review-panel, .website-editor-panel { margin-top: 28px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .page-tab { width: 100%; display: grid; grid-template-columns: 1fr 18px; gap: 3px; padding: 12px 8px; border: 0; border-bottom: 1px solid #edf0ec; text-align: left; color: var(--muted); background: transparent; }
 .page-tab span { grid-column: 1; color: var(--ink); font: 700 13px Arial, sans-serif; }.page-tab small { grid-column: 1; font: 10px Arial, sans-serif; }.page-tab b { grid-column: 2; grid-row: 1 / span 2; align-self: center; }.page-tab.selected { margin: 3px -8px; width: calc(100% + 16px); border-radius: 6px; background: var(--mint); }.page-tab.selected span, .page-tab.selected b { color: var(--green); }

@@ -17,7 +17,7 @@ type WebsitePage = {
   seoTitle: string;
   seoDescription: string;
 };
-type WebsiteDraft = { pages: WebsitePage[] };
+type WebsiteDraft = { pages: WebsitePage[]; growthPack?: { blogs: { title: string; keyword: string; outline: string }[]; localPages: string[]; faq: { question: string; answer: string }[] } };
 type Photo = { name: string; url: string; x: number; y: number };
 type Provider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 type ProviderConnection = { id: string; provider: Provider; label: string };
@@ -25,6 +25,12 @@ type ProviderConnection = { id: string; provider: Provider; label: string };
 export default function WebsiteBuilderPage() {
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [services, setServices] = useState("");
   const [audience, setAudience] = useState("");
   const [tone, setTone] = useState("Clear, confident, and human");
   const [primaryAction, setPrimaryAction] = useState("Contact the business");
@@ -41,6 +47,8 @@ export default function WebsiteBuilderPage() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState("");
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
+  const [refinementInstruction, setRefinementInstruction] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
   const seoTitleLength = selectedPage?.seoTitle?.length || 0;
@@ -51,9 +59,15 @@ export default function WebsiteBuilderPage() {
     const saved = window.localStorage.getItem("helloai-website-draft");
     if (!saved) return;
     try {
-      const data = JSON.parse(saved) as { businessName?: string; description?: string; audience?: string; tone?: string; primaryAction?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
+      const data = JSON.parse(saved) as { businessName?: string; description?: string; industry?: string; location?: string; phone?: string; email?: string; websiteUrl?: string; services?: string; audience?: string; tone?: string; primaryAction?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
       setBusinessName(data.businessName || "");
       setDescription(data.description || "");
+      setIndustry(data.industry || "");
+      setLocation(data.location || "");
+      setPhone(data.phone || "");
+      setEmail(data.email || "");
+      setWebsiteUrl(data.websiteUrl || "");
+      setServices(data.services || "");
       setAudience(data.audience || "");
       setTone(data.tone || "Clear, confident, and human");
       setPrimaryAction(data.primaryAction || "Contact the business");
@@ -73,15 +87,15 @@ export default function WebsiteBuilderPage() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("helloai-website-draft", JSON.stringify({ businessName, description, audience, tone, primaryAction, draft, photos }));
-  }, [businessName, description, audience, tone, primaryAction, draft, photos]);
+    window.localStorage.setItem("helloai-website-draft", JSON.stringify({ businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos }));
+  }, [businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos]);
 
   const buildWebsite = async (event: FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/website", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, audience, tone, primaryAction }) });
+      const response = await fetch("/api/website", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to build website");
       setDraft(data.draft);
@@ -116,6 +130,23 @@ export default function WebsiteBuilderPage() {
 
   const setProviderField = (key: string, value: string) => setProviderFields((current) => ({ ...current, [key]: value }));
 
+  const refineSelectedPage = async () => {
+    if (!selectedPage || !refinementInstruction.trim()) return;
+    setIsRefining(true);
+    setError("");
+    try {
+      const response = await fetch("/api/website/refine", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page: selectedPage, instruction: refinementInstruction, businessName, audience, tone }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to refine page");
+      setDraft((current) => current ? { ...current, pages: current.pages.map((page) => page.slug === selectedPage.slug ? { ...page, ...data.page } : page) } : current);
+      setRefinementInstruction("");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to refine page");
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
   const updateSelectedPage = (field: keyof WebsitePage, value: string) => {
     if (!draft || !selectedPage) return;
     setDraft({ ...draft, pages: draft.pages.map((page) => page.slug === selectedPage.slug ? { ...page, [field]: value } : page) });
@@ -139,8 +170,9 @@ export default function WebsiteBuilderPage() {
         <section className="website-brief-panel">
           <span className="eyebrow">BUILD A COMPLETE SITE</span><h1>Shape every page before it goes live.</h1>
           <p>Generate a site map, review pages one by one, edit the copy, and add your own photos to each page.</p>
-          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" /></label><label>Website brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label><label>Ideal audience<input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="e.g. Busy homeowners in Austin" /></label><label>Brand voice<select value={tone} onChange={(event) => setTone(event.target.value)}><option>Clear, confident, and human</option><option>Warm and conversational</option><option>Premium and editorial</option><option>Bold and energetic</option><option>Minimal and trustworthy</option></select></label><label>Primary conversion action<input value={primaryAction} onChange={(event) => setPrimaryAction(event.target.value)} placeholder="e.g. Book a consultation" /></label>{error && <div className="error-banner">{error}</div>}{autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building site map..." : "Build website draft  →"}</button></form>
+          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" required /></label><label>Industry<input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="e.g. Cleaning services" /></label><label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Manchester" /></label><label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. 0161 555 0100" /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="hello@example.com" /></label><label>Existing website <span className="optional-label">optional</span><input type="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://example.com" /></label><label>Services to promote<input value={services} onChange={(event) => setServices(event.target.value)} placeholder="End of tenancy, deep cleaning, carpet cleaning" /></label><label>Business brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label><label>Ideal audience<input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="e.g. Busy homeowners in Manchester" /></label><label>Brand voice<select value={tone} onChange={(event) => setTone(event.target.value)}><option>Clear, confident, and human</option><option>Warm and conversational</option><option>Premium and editorial</option><option>Bold and energetic</option><option>Minimal and trustworthy</option></select></label><label>Primary conversion action<input value={primaryAction} onChange={(event) => setPrimaryAction(event.target.value)} placeholder="e.g. Book a consultation" /></label>{error && <div className="error-banner">{error}</div>}{autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building website and growth pack..." : "Build website + growth pack  →"}</button></form>
           {draft && <div className="page-review-panel"><span className="eyebrow">PAGES TO REVIEW</span>{draft.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage?.slug ? "page-tab selected" : "page-tab"} type="button" onClick={() => setSelectedSlug(page.slug)}><span>{page.label}</span><small>Review and edit</small><b>→</b></button>)}</div>}
+          {draft?.growthPack && <section className="growth-pack-panel"><span className="eyebrow">GROWTH PACK</span><strong>{draft.growthPack.blogs.length} blog ideas · {draft.growthPack.localPages.length} local pages · {draft.growthPack.faq.length} FAQs</strong><div>{draft.growthPack.blogs.slice(0, 4).map((blog) => <p key={blog.title}><b>{blog.title}</b><small>{blog.keyword}</small></p>)}</div></section>}
           <section className="website-publishing-panel"><span className="eyebrow">CONNECT TO PUBLISH</span><strong>{providerConnections.length ? `${providerConnections.length} provider connection${providerConnections.length === 1 ? "" : "s"}` : "Connect website providers"}</strong><p>Connect as many websites and provider accounts as needed. Tokens are sent to the server and not saved in the browser.</p>{providerConnections.length > 0 && <div className="website-connection-list">{providerConnections.map((connection) => <div key={connection.id}><span>{connection.label}</span><small>Verified connection</small></div>)}</div>}{isLoadingPhotos && <div className="success-banner">Adding relevant page imagery...</div>}<select value={provider} onChange={(event) => setProvider(event.target.value as Provider)}><option value="wordpress">WordPress REST API</option><option value="shopify">Shopify Admin API</option><option value="webflow">Webflow API</option><option value="github-vercel">GitHub / Vercel</option><option value="custom">Custom CMS API</option></select>{provider === "wordpress" && <><input placeholder="WordPress site URL" value={providerFields.baseUrl || ""} onChange={(event) => setProviderField("baseUrl", event.target.value)} /><input type="password" placeholder="Application access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "shopify" && <><input placeholder="store.myshopify.com" value={providerFields.shopDomain || ""} onChange={(event) => setProviderField("shopDomain", event.target.value)} /><input type="password" placeholder="Admin API access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "webflow" && <><input placeholder="Webflow site ID" value={providerFields.siteId || ""} onChange={(event) => setProviderField("siteId", event.target.value)} /><input type="password" placeholder="Webflow API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "github-vercel" && <><input placeholder="owner/repository" value={providerFields.repository || ""} onChange={(event) => setProviderField("repository", event.target.value)} /><input placeholder="Vercel project name" value={providerFields.vercelProject || ""} onChange={(event) => setProviderField("vercelProject", event.target.value)} /><input type="password" placeholder="GitHub token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "custom" && <><input placeholder="Custom CMS endpoint" value={providerFields.endpoint || ""} onChange={(event) => setProviderField("endpoint", event.target.value)} /><input type="password" placeholder="CMS API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}<button type="button" className="secondary-button" onClick={connectProvider} disabled={isConnecting}>{isConnecting ? "Verifying connection..." : "Verify and connect another"}</button>{connectionMessage && <div className="success-banner">{connectionMessage}</div>}</section>
         </section>
         <section className="website-preview-frame">
@@ -153,7 +185,7 @@ export default function WebsiteBuilderPage() {
             <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div><div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
           </div> : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
         </section>
-        {selectedPage && <aside className="website-editor-panel"><span className="eyebrow">EDIT {selectedPage.label.toUpperCase()}</span><h2>Page controls</h2><label>Headline<input value={selectedPage.title} onChange={(event) => updateSelectedPage("title", event.target.value)} /></label><label>Tagline<textarea value={selectedPage.tagline} onChange={(event) => updateSelectedPage("tagline", event.target.value)} /></label><label>Intro<textarea value={selectedPage.intro} onChange={(event) => updateSelectedPage("intro", event.target.value)} /></label><label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label><label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label><div className="seo-panel"><div className="seo-panel-heading"><span className="eyebrow">SEO READINESS</span><strong>{seoChecks}/4</strong></div><label>SEO title <small>{seoTitleLength}/60 characters</small><input value={selectedPage.seoTitle || ""} onChange={(event) => updateSelectedPage("seoTitle", event.target.value)} /></label><label>SEO description <small>{seoDescriptionLength}/160 characters</small><textarea value={selectedPage.seoDescription || ""} onChange={(event) => updateSelectedPage("seoDescription", event.target.value)} /></label><p>Use a clear service, location, and customer outcome. These fields become your search preview.</p></div><div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><img src={photo.url} alt={photo.name} /><span>{photo.name}</span></div>)}</div></aside>}
+        {selectedPage && <aside className="website-editor-panel"><span className="eyebrow">EDIT {selectedPage.label.toUpperCase()}</span><h2>Page controls</h2><div className="ai-refine-panel"><span className="eyebrow">AI PAGE DIRECTOR</span><textarea value={refinementInstruction} onChange={(event) => setRefinementInstruction(event.target.value)} placeholder="e.g. Make this feel more premium and add a stronger booking CTA" /><button type="button" className="secondary-button" onClick={refineSelectedPage} disabled={isRefining || !refinementInstruction.trim()}>{isRefining ? "Refining page..." : "Refine with AI"}</button></div><label>Headline<input value={selectedPage.title} onChange={(event) => updateSelectedPage("title", event.target.value)} /></label><label>Tagline<textarea value={selectedPage.tagline} onChange={(event) => updateSelectedPage("tagline", event.target.value)} /></label><label>Intro<textarea value={selectedPage.intro} onChange={(event) => updateSelectedPage("intro", event.target.value)} /></label><label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label><label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label><div className="seo-panel"><div className="seo-panel-heading"><span className="eyebrow">SEO READINESS</span><strong>{seoChecks}/4</strong></div><label>SEO title <small>{seoTitleLength}/60 characters</small><input value={selectedPage.seoTitle || ""} onChange={(event) => updateSelectedPage("seoTitle", event.target.value)} /></label><label>SEO description <small>{seoDescriptionLength}/160 characters</small><textarea value={selectedPage.seoDescription || ""} onChange={(event) => updateSelectedPage("seoDescription", event.target.value)} /></label><p>Use a clear service, location, and customer outcome. These fields become your search preview.</p></div><div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><img src={photo.url} alt={photo.name} /><span>{photo.name}</span></div>)}</div></aside>}
       </div>
     </main>
   );
