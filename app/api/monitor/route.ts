@@ -1,9 +1,4 @@
-const requiredEnvironmentVariables = [
-  "OPENAI_API_KEY",
-  "RUNWAYML_API_SECRET",
-  "HEYGEN_API_KEY",
-  "HELLOAI_API_KEY",
-];
+const requiredEnvironmentVariables = ["OPENAI_API_KEY"];
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -21,7 +16,7 @@ export async function GET(request: Request) {
 
   return Response.json(
     {
-      service: "HelloAI monitor",
+      service: "HelloAI growth platform",
       status: healthy ? "healthy" : "degraded",
       checkedAt: new Date().toISOString(),
       checks,
