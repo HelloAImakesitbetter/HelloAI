@@ -11,6 +11,7 @@ type WebsitePage = {
   benefits: string[];
   steps: string[];
   closing: string;
+  imagePrompt: string;
   seoTitle: string;
   seoDescription: string;
 };
@@ -39,7 +40,7 @@ function parseDraft(output: string): WebsiteDraft {
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
-    const { businessName, description } = (await req.json()) as { businessName?: string; description?: string };
+    const { businessName, description, audience, tone, primaryAction } = (await req.json()) as { businessName?: string; description?: string; audience?: string; tone?: string; primaryAction?: string };
 
     if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
     if (!description || typeof description !== "string") {
@@ -54,10 +55,14 @@ export async function POST(req: Request) {
 Business brief:
 ${description}
 
-Return only valid JSON with this exact shape:
-{"pages":[{"slug":"home","label":"Home","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""},{"slug":"services","label":"Services","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""},{"slug":"about","label":"About","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""},{"slug":"contact","label":"Contact","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","seoTitle":"","seoDescription":""}]}
+Ideal audience: ${audience || "Not specified"}
+Brand voice: ${tone || "Clear, confident, and human"}
+Primary conversion action: ${primaryAction || "Contact the business"}
 
-Write clear customer-facing copy. Keep the four pages distinct. Write SEO titles under 60 characters and SEO descriptions between 120 and 160 characters using natural local search language from the brief. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
+Return only valid JSON with this exact shape:
+{"pages":[{"slug":"home","label":"Home","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","imagePrompt":"editorial photo subject and setting, no text or logos","seoTitle":"","seoDescription":""},{"slug":"services","label":"Services","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","imagePrompt":"editorial photo subject and setting, no text or logos","seoTitle":"","seoDescription":""},{"slug":"about","label":"About","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","imagePrompt":"editorial photo subject and setting, no text or logos","seoTitle":"","seoDescription":""},{"slug":"contact","label":"Contact","title":"","tagline":"","intro":"","primaryCta":"","secondaryCta":"","benefits":["","",""],"steps":["","",""],"closing":"","imagePrompt":"editorial photo subject and setting, no text or logos","seoTitle":"","seoDescription":""}]}
+
+Write clear customer-facing copy that reflects the audience, voice, and conversion action. Keep the four pages distinct. Write SEO titles under 60 characters and SEO descriptions between 120 and 160 characters using natural local search language from the brief. Make every CTA specific to the conversion action. Do not include HTML, markdown, fake statistics, unverifiable claims, or placeholder text.`,
     });
 
     return Response.json({ draft: parseDraft(response.output_text) });

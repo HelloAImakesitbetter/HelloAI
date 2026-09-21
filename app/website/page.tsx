@@ -13,15 +13,21 @@ type WebsitePage = {
   benefits: string[];
   steps: string[];
   closing: string;
+  imagePrompt?: string;
   seoTitle: string;
   seoDescription: string;
 };
 type WebsiteDraft = { pages: WebsitePage[] };
 type Photo = { name: string; url: string; x: number; y: number };
+type Provider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
+type ProviderConnection = { id: string; provider: Provider; label: string };
 
 export default function WebsiteBuilderPage() {
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
+  const [audience, setAudience] = useState("");
+  const [tone, setTone] = useState("Clear, confident, and human");
+  const [primaryAction, setPrimaryAction] = useState("Contact the business");
   const [draft, setDraft] = useState<WebsiteDraft | null>(null);
   const [selectedSlug, setSelectedSlug] = useState("home");
   const [photos, setPhotos] = useState<Record<string, Photo[]>>({});
@@ -29,6 +35,12 @@ export default function WebsiteBuilderPage() {
   const [error, setError] = useState("");
   const [autoFixNotice, setAutoFixNotice] = useState("");
   const [draggingPhoto, setDraggingPhoto] = useState<{ pageSlug: string; name: string } | null>(null);
+  const [provider, setProvider] = useState<Provider>("wordpress");
+  const [providerFields, setProviderFields] = useState<Record<string, string>>({});
+  const [providerConnections, setProviderConnections] = useState<ProviderConnection[]>([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState("");
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
   const seoTitleLength = selectedPage?.seoTitle?.length || 0;
@@ -39,9 +51,12 @@ export default function WebsiteBuilderPage() {
     const saved = window.localStorage.getItem("helloai-website-draft");
     if (!saved) return;
     try {
-      const data = JSON.parse(saved) as { businessName?: string; description?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
+      const data = JSON.parse(saved) as { businessName?: string; description?: string; audience?: string; tone?: string; primaryAction?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
       setBusinessName(data.businessName || "");
       setDescription(data.description || "");
+      setAudience(data.audience || "");
+      setTone(data.tone || "Clear, confident, and human");
+      setPrimaryAction(data.primaryAction || "Contact the business");
       setDraft(data.draft || null);
       setPhotos(Object.fromEntries(Object.entries(data.photos || {}).map(([slug, pagePhotos]) => [slug, (pagePhotos as Photo[]).map((photo, index) => ({ ...photo, x: photo.x ?? 5 + (index % 3) * 30, y: photo.y ?? 12 + Math.floor(index / 3) * 28 }))])));
     } catch { /* Ignore stale local drafts. */ }
@@ -58,25 +73,48 @@ export default function WebsiteBuilderPage() {
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("helloai-website-draft", JSON.stringify({ businessName, description, draft, photos }));
-  }, [businessName, description, draft, photos]);
+    window.localStorage.setItem("helloai-website-draft", JSON.stringify({ businessName, description, audience, tone, primaryAction, draft, photos }));
+  }, [businessName, description, audience, tone, primaryAction, draft, photos]);
 
   const buildWebsite = async (event: FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/website", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description }) });
+      const response = await fetch("/api/website", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, audience, tone, primaryAction }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to build website");
       setDraft(data.draft);
       setSelectedSlug("home");
+      setIsLoadingPhotos(true);
+      const generatedPhotos = Object.fromEntries(data.draft.pages.map((page: WebsitePage, index: number) => [page.slug, [{ name: `${page.label} editorial image`, url: `https://loremflickr.com/1200/800/${encodeURIComponent(page.imagePrompt || description.split(" ").slice(0, 4).join(","))}?lock=${index + 1}`, x: 5, y: 12 }]]));
+      setPhotos((current) => ({ ...generatedPhotos, ...current }));
+      setIsLoadingPhotos(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to build website");
     } finally {
       setIsLoading(false);
     }
   };
+
+  const connectProvider = async () => {
+    setIsConnecting(true);
+    setConnectionMessage("");
+    setError("");
+    try {
+      const response = await fetch("/api/seo/connections", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, ...providerFields }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Provider connection failed");
+      setProviderConnections((current) => [...current, { id: `${provider}-${Date.now()}`, provider, label: data.label }]);
+      setConnectionMessage(data.detail);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Provider connection failed");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const setProviderField = (key: string, value: string) => setProviderFields((current) => ({ ...current, [key]: value }));
 
   const updateSelectedPage = (field: keyof WebsitePage, value: string) => {
     if (!draft || !selectedPage) return;
@@ -101,8 +139,9 @@ export default function WebsiteBuilderPage() {
         <section className="website-brief-panel">
           <span className="eyebrow">BUILD A COMPLETE SITE</span><h1>Shape every page before it goes live.</h1>
           <p>Generate a site map, review pages one by one, edit the copy, and add your own photos to each page.</p>
-          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" /></label><label>Website brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label>{error && <div className="error-banner">{error}</div>}{autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building site map..." : "Build website draft  →"}</button></form>
+          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" /></label><label>Website brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label><label>Ideal audience<input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="e.g. Busy homeowners in Austin" /></label><label>Brand voice<select value={tone} onChange={(event) => setTone(event.target.value)}><option>Clear, confident, and human</option><option>Warm and conversational</option><option>Premium and editorial</option><option>Bold and energetic</option><option>Minimal and trustworthy</option></select></label><label>Primary conversion action<input value={primaryAction} onChange={(event) => setPrimaryAction(event.target.value)} placeholder="e.g. Book a consultation" /></label>{error && <div className="error-banner">{error}</div>}{autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building site map..." : "Build website draft  →"}</button></form>
           {draft && <div className="page-review-panel"><span className="eyebrow">PAGES TO REVIEW</span>{draft.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage?.slug ? "page-tab selected" : "page-tab"} type="button" onClick={() => setSelectedSlug(page.slug)}><span>{page.label}</span><small>Review and edit</small><b>→</b></button>)}</div>}
+          <section className="website-publishing-panel"><span className="eyebrow">CONNECT TO PUBLISH</span><strong>{providerConnections.length ? `${providerConnections.length} provider connection${providerConnections.length === 1 ? "" : "s"}` : "Connect website providers"}</strong><p>Connect as many websites and provider accounts as needed. Tokens are sent to the server and not saved in the browser.</p>{providerConnections.length > 0 && <div className="website-connection-list">{providerConnections.map((connection) => <div key={connection.id}><span>{connection.label}</span><small>Verified connection</small></div>)}</div>}{isLoadingPhotos && <div className="success-banner">Adding relevant page imagery...</div>}<select value={provider} onChange={(event) => setProvider(event.target.value as Provider)}><option value="wordpress">WordPress REST API</option><option value="shopify">Shopify Admin API</option><option value="webflow">Webflow API</option><option value="github-vercel">GitHub / Vercel</option><option value="custom">Custom CMS API</option></select>{provider === "wordpress" && <><input placeholder="WordPress site URL" value={providerFields.baseUrl || ""} onChange={(event) => setProviderField("baseUrl", event.target.value)} /><input type="password" placeholder="Application access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "shopify" && <><input placeholder="store.myshopify.com" value={providerFields.shopDomain || ""} onChange={(event) => setProviderField("shopDomain", event.target.value)} /><input type="password" placeholder="Admin API access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "webflow" && <><input placeholder="Webflow site ID" value={providerFields.siteId || ""} onChange={(event) => setProviderField("siteId", event.target.value)} /><input type="password" placeholder="Webflow API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "github-vercel" && <><input placeholder="owner/repository" value={providerFields.repository || ""} onChange={(event) => setProviderField("repository", event.target.value)} /><input placeholder="Vercel project name" value={providerFields.vercelProject || ""} onChange={(event) => setProviderField("vercelProject", event.target.value)} /><input type="password" placeholder="GitHub token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "custom" && <><input placeholder="Custom CMS endpoint" value={providerFields.endpoint || ""} onChange={(event) => setProviderField("endpoint", event.target.value)} /><input type="password" placeholder="CMS API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}<button type="button" className="secondary-button" onClick={connectProvider} disabled={isConnecting}>{isConnecting ? "Verifying connection..." : "Verify and connect another"}</button>{connectionMessage && <div className="success-banner">{connectionMessage}</div>}</section>
         </section>
         <section className="website-preview-frame">
           {selectedPage ? <div className="website-preview">
