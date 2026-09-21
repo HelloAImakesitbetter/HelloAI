@@ -46,6 +46,24 @@ export default function LoginPage() {
     setIsLoading(false);
   };
 
+  const signInWithGitHub = async () => {
+    setMessage("");
+    if (!supabase) {
+      setMessage("Supabase authentication is not configured yet.");
+      return;
+    }
+
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: `${window.location.origin}/` },
+    });
+    if (error) {
+      setMessage(error.message);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <main className="auth-shell">
       <section className="auth-card">
@@ -58,6 +76,7 @@ export default function LoginPage() {
           <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
           {message && <p className="auth-message">{message}</p>}
           <button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Please wait..." : mode === "login" ? "Sign in  →" : "Create account  →"}</button>
+          {mode === "login" && <button className="secondary-button" type="button" onClick={signInWithGitHub} disabled={isLoading}>Continue with GitHub</button>}
         </form>
         <button className="auth-switch" type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMessage(""); }}>{mode === "login" ? "Need an account? Create one" : "Already have an account? Sign in"}</button>
       </section>
