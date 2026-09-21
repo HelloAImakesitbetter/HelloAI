@@ -16,6 +16,9 @@ export default function LiveAgent() {
 
   useEffect(() => {
     setSite(window.localStorage.getItem("helloai-seo-connected-site") || "");
+    const openAgent = () => setOpen(true);
+    window.addEventListener("helloai:open-agent", openAgent);
+    return () => window.removeEventListener("helloai:open-agent", openAgent);
   }, []);
 
   const sendMessage = async (event: FormEvent) => {
