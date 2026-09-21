@@ -82,7 +82,7 @@ export default function Home() {
         <div className="task-brand"><span>H</span><strong>HelloAI</strong></div>
         <button className="task-search" type="button" onClick={() => setSearchOpen(true)}>⌕ <span>Search</span><kbd>⌘ K</kbd></button>
         <a className="task-new-button" href="/website">＋ New task</a>
-        <nav className="task-nav"><a className="selected" href="/">⌂ <span>Home</span></a><a href="/website">▤ <span>Website Builder</span></a><a href="/seo">⌕ <span>SEO Engine</span></a><a href="/scheduled">◷ <span>Scheduled</span></a><a href="/seo">⌘ <span>Plugins</span></a><a href="/seo">▣ <span>Notetaker</span><em>Free</em></a><a href="/seo">••• <span>Explore</span></a></nav>
+        <nav className="task-nav"><a className="selected" href="/">⌂ <span>Home</span></a><a href="/website">▤ <span>Website Builder</span></a><a href="/seo">⌕ <span>SEO Engine</span></a><a href="/scheduled">◷ <span>Scheduled</span></a><a href="/plugins">⌘ <span>Plugins</span></a><a href="/seo">▣ <span>Notetaker</span><em>Free</em></a><a href="/seo">••• <span>Explore</span></a></nav>
         <div className="task-sidebar-section"><span>Projects</span><button type="button">＋</button><p>No projects yet</p></div>
         <div className="task-sidebar-section history"><span>History</span><p className="history-item"><i />{businessName}</p></div>
         <div className="task-account"><span>A</span><div><strong>Account</strong><small>Personal workspace</small></div><b>•••</b></div>
