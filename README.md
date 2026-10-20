@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HelloAI
 
-## Getting Started
+This project is a Next.js app for website strategy, SEO planning, publishing setup, and provider connection workflows.
 
-First, run the development server:
+## Features in this app
+
+- Task-first home workspace
+- Website builder workflow
+- SEO engine and audit flow
+- Scheduled tasks manager
+- Plugin and provider status page
+- Real environment-driven connection checks for external systems
+
+## Required setup before live provider connections
+
+Copy [.env.example](.env.example) to a local environment file and add your real values.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then set the real values for:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- OpenAI API key
+- Supabase URL and keys
+- Google OAuth client ID and secret
+- GOOGLE_SESSION_SECRET for encrypted Google sessions
+- SEMRUSH_API_KEY for live backlink reporting
+- Meta app credentials for WhatsApp
+- Any provider-specific URLs or project IDs you want to enable
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Provider connection checklist
 
-## Learn More
+### Google
 
-To learn more about Next.js, take a look at the following resources:
+1. Create a Google Cloud project
+2. Enable OAuth and required APIs
+3. Create an OAuth client ID
+4. Add redirect URI:
+   - http://localhost:3000/api/auth/google/callback
+5. Add credentials to your environment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### WhatsApp / Meta
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Create or connect a Meta Business account
+2. Create a WhatsApp app
+3. Add the phone number ID and access token
+4. Set the webhook verification token in your environment
 
-## Deploy on Vercel
+### Publishing providers
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- WordPress: set WORDPRESS_BASE_URL
+- Shopify: set SHOPIFY_STORE_DOMAIN
+- Webflow: set WEBFLOW_SITE_ID
+- GitHub / Vercel: set GITHUB_REPOSITORY and VERCEL_PROJECT_NAME
+- Custom CMS: set CUSTOM_CMS_ENDPOINT
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+Then open:
+
+- http://localhost:3000
+
+## Production verification
+
+```bash
+npm run build
+```
+
+Search Console performance is loaded from the connected Google account and reports observed clicks, impressions, CTR, and average position for the selected property. This is measured Search Console data, not a guaranteed live rank. Backlink reporting is enabled only when SEMRUSH_API_KEY is configured; the app shows an unavailable state instead of inventing backlink data.
+
+Signed-in users can persist their website and SEO workspace in the existing Supabase `projects` table. Ensure that table allows authenticated users to upsert their own rows for `kind` values `website` and `seo`.
+
+This project includes route generation and app plumbing for working connection flows, but real third-party integrations still require active provider accounts and credentials.

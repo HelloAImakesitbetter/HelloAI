@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 export default function ImageEditorPage() {
@@ -17,7 +19,7 @@ export default function ImageEditorPage() {
 
   useEffect(() => {
     if (!sourceUrl || !canvasRef.current) return;
-    const image = new Image();
+    const image = new window.Image();
     image.onload = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -79,7 +81,7 @@ export default function ImageEditorPage() {
 
   return (
     <main className="image-editor-shell">
-      <header className="website-builder-header"><a href="/" className="back-link">← HelloAI workspace</a><span className="eyebrow">PHOTO EDITOR</span></header>
+      <header className="website-builder-header"><Link href="/" className="back-link">← HelloAI workspace</Link><span className="eyebrow">PHOTO EDITOR</span></header>
       <div className="image-editor-layout">
         <section className="image-editor-controls">
           <span className="eyebrow">EDIT AN IMAGE</span><h1>Make the picture fit the idea.</h1><p>Upload a photo, tune the look, rotate it, and download the result. Basic edits run directly in your browser.</p>
@@ -92,7 +94,7 @@ export default function ImageEditorPage() {
           <div className="ai-edit-box"><span className="eyebrow">AI EDIT</span><textarea value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} placeholder="e.g. Change the outfit to a smart navy blazer and keep the face natural" /><button className="secondary-button" type="button" onClick={editWithAi} disabled={!sourceUrl || !aiPrompt.trim() || isAiEditing}>{isAiEditing ? "Editing with AI..." : "Apply AI edit"}</button>{error && <p className="image-error">{error}</p>}</div>
           <div className="image-action-row"><button className="secondary-button" type="button" onClick={() => setRotation((value) => (value + 90) % 360)} disabled={!sourceUrl}>Rotate 90°</button><button className="primary-button" type="button" onClick={downloadImage} disabled={!sourceUrl}>Download image ↓</button></div>
         </section>
-        <section className="image-canvas-frame"><div className="image-canvas-topline"><span>LIVE PREVIEW</span><span>{sourceUrl ? "Edits are ready" : "Choose a photo to begin"}</span></div>{sourceUrl ? <><canvas ref={canvasRef} className="image-editor-canvas" />{aiImageUrl && <div className="ai-result"><span className="eyebrow">AI EDIT PREVIEW</span><img src={aiImageUrl} alt="AI edited preview" /><a className="primary-button" href={aiImageUrl} download={fileName}>Download AI edit ↓</a></div>}</> : <div className="image-editor-empty"><span>✦</span><h2>Your photo will appear here.</h2><p>Nothing leaves your browser for basic edits.</p></div>}</section>
+        <section className="image-canvas-frame"><div className="image-canvas-topline"><span>LIVE PREVIEW</span><span>{sourceUrl ? "Edits are ready" : "Choose a photo to begin"}</span></div>{sourceUrl ? <><canvas ref={canvasRef} className="image-editor-canvas" />{aiImageUrl && <div className="ai-result"><span className="eyebrow">AI EDIT PREVIEW</span><Image src={aiImageUrl} alt="AI edited preview" width={700} height={500} unoptimized /><a className="primary-button" href={aiImageUrl} download={fileName}>Download AI edit ↓</a></div>}</> : <div className="image-editor-empty"><span>✦</span><h2>Your photo will appear here.</h2><p>Nothing leaves your browser for basic edits.</p></div>}</section>
       </div>
     </main>
   );

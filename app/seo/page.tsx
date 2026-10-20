@@ -1,6 +1,8 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 type SeoPage = { page: string; keyword: string; title: string; description: string; intent: string };
 type SeoReport = {
@@ -28,6 +30,8 @@ type GrowthIntelligence = {
   forecast: { currentMonthlyTraffic: number; estimatedMonthlyTraffic: number; assumptions: string[] };
   autopilot: string[];
 };
+type SearchConsoleRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
+type BacklinkReport = { configured: boolean; target?: string; total?: number; backlinks?: Record<string, string>[]; message?: string; error?: string };
 type PublishingProvider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 const publishingProviders: { id: PublishingProvider; name: string; description: string }[] = [
   { id: "wordpress", name: "WordPress", description: "REST API publishing" },
@@ -52,7 +56,7 @@ export default function SeoPage() {
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState(() => (typeof window === "undefined" ? "" : window.localStorage.getItem("helloai-seo-connected-site") || ""));
   const [report, setReport] = useState<SeoReport | null>(null);
   const [audit, setAudit] = useState<WebsiteAudit | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -60,8 +64,8 @@ export default function SeoPage() {
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [reviewQueue, setReviewQueue] = useState<string[]>([]);
-  const [connectedSite, setConnectedSite] = useState("");
-  const [autoApplyFixes, setAutoApplyFixes] = useState(false);
+  const [connectedSite, setConnectedSite] = useState(() => (typeof window === "undefined" ? "" : window.localStorage.getItem("helloai-seo-connected-site") || ""));
+  const [autoApplyFixes, setAutoApplyFixes] = useState(() => (typeof window === "undefined" ? false : window.localStorage.getItem("helloai-seo-auto-fix") === "true"));
   const [provider, setProvider] = useState<PublishingProvider>("wordpress");
   const [providerFields, setProviderFields] = useState<Record<string, string>>({});
   const [connectedProviders, setConnectedProviders] = useState<Record<string, string>>({});
@@ -69,15 +73,41 @@ export default function SeoPage() {
   const [competitorUrl, setCompetitorUrl] = useState("");
   const [intelligence, setIntelligence] = useState<GrowthIntelligence | null>(null);
   const [isGrowing, setIsGrowing] = useState(false);
+  const [accountUserId, setAccountUserId] = useState<string | null>(null);
+  const [searchConsoleRows, setSearchConsoleRows] = useState<SearchConsoleRow[]>([]);
+  const [searchConsoleSites, setSearchConsoleSites] = useState<{ siteUrl: string }[]>([]);
+  const [searchConsoleSite, setSearchConsoleSite] = useState("");
+  const [isLoadingSearchConsole, setIsLoadingSearchConsole] = useState(false);
+  const [backlinks, setBacklinks] = useState<BacklinkReport | null>(null);
+  const [isLoadingBacklinks, setIsLoadingBacklinks] = useState(false);
 
   useEffect(() => {
-    const savedSite = window.localStorage.getItem("helloai-seo-connected-site");
-    if (savedSite) {
-      setConnectedSite(savedSite);
-      setWebsiteUrl(savedSite);
-    }
-    setAutoApplyFixes(window.localStorage.getItem("helloai-seo-auto-fix") === "true");
+    const loadWorkspace = async () => {
+      const saved = window.localStorage.getItem("helloai-seo-workspace");
+      if (saved) {
+        try {
+          const data = JSON.parse(saved) as { report?: SeoReport; audit?: WebsiteAudit; intelligence?: GrowthIntelligence; searchConsoleRows?: SearchConsoleRow[]; searchConsoleSites?: { siteUrl: string }[]; searchConsoleSite?: string; backlinks?: BacklinkReport };
+          setReport(data.report || null); setAudit(data.audit || null); setIntelligence(data.intelligence || null); setSearchConsoleRows(data.searchConsoleRows || []); setSearchConsoleSites(data.searchConsoleSites || []); setSearchConsoleSite(data.searchConsoleSite || ""); setBacklinks(data.backlinks || null);
+        } catch { /* Ignore stale SEO workspace data. */ }
+      }
+      if (!supabase) return;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData.session?.user.id;
+      if (!userId) return;
+      setAccountUserId(userId);
+      const { data } = await supabase.from("projects").select("payload").eq("user_id", userId).eq("kind", "seo").maybeSingle();
+      const payload = data?.payload as Record<string, unknown> | undefined;
+      if (!payload) return;
+      setReport((payload.report as SeoReport) || null); setAudit((payload.audit as WebsiteAudit) || null); setIntelligence((payload.intelligence as GrowthIntelligence) || null); setSearchConsoleRows((payload.searchConsoleRows as SearchConsoleRow[]) || []); setSearchConsoleSites((payload.searchConsoleSites as { siteUrl: string }[]) || []); setSearchConsoleSite(String(payload.searchConsoleSite || "")); setBacklinks((payload.backlinks as BacklinkReport) || null);
+    };
+    void loadWorkspace();
   }, []);
+
+  useEffect(() => {
+    const payload = { report, audit, intelligence, searchConsoleRows, searchConsoleSites, searchConsoleSite, backlinks };
+    window.localStorage.setItem("helloai-seo-workspace", JSON.stringify(payload));
+    if (supabase && accountUserId && (report || audit || intelligence)) void supabase.from("projects").upsert({ user_id: accountUserId, kind: "seo", name: "SEO workspace", payload, updated_at: new Date().toISOString() }, { onConflict: "user_id,kind" });
+  }, [accountUserId, report, audit, intelligence, searchConsoleRows, searchConsoleSites, searchConsoleSite, backlinks]);
 
   const generateReport = async (event: FormEvent) => {
     event.preventDefault();
@@ -138,6 +168,26 @@ export default function SeoPage() {
     }
   };
 
+  const loadSearchConsole = async () => {
+    setIsLoadingSearchConsole(true); setError("");
+    try {
+      const response = await fetch(`/api/seo/search-console?days=28${searchConsoleSite ? `&siteUrl=${encodeURIComponent(searchConsoleSite)}` : ""}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Search Console data could not be loaded");
+      setSearchConsoleRows(data.rows || []); setSearchConsoleSites(data.sites || []); setSearchConsoleSite(data.siteUrl || data.sites?.[0]?.siteUrl || ""); setStatusMessage("Search Console performance loaded for the last 28 days.");
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Search Console data could not be loaded"); } finally { setIsLoadingSearchConsole(false); }
+  };
+
+  const loadBacklinks = async () => {
+    setIsLoadingBacklinks(true); setError("");
+    try {
+      const response = await fetch(`/api/seo/backlinks?siteUrl=${encodeURIComponent(websiteUrl || connectedSite)}`);
+      const data = await response.json();
+      if (!response.ok && response.status !== 503) throw new Error(data.error || "Backlink data could not be loaded");
+      setBacklinks(data); if (!data.configured) setStatusMessage(data.message || "Backlink provider is not configured.");
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Backlink data could not be loaded"); } finally { setIsLoadingBacklinks(false); }
+  };
+
   const queueFix = (issueKey: string) => {
     setReviewQueue((current) => current.includes(issueKey) ? current.filter((key) => key !== issueKey) : [...current, issueKey]);
     setStatusMessage("");
@@ -188,7 +238,6 @@ export default function SeoPage() {
       const primaryKeyword = report?.primaryKeyword || (description ? description.split(" ").slice(0, 3).join(" ") : "local service");
       const businessLabel = businessName || "Business";
       const localSuffix = location ? ` in ${location}` : "";
-      const seoBaseIntro = report?.summary || `${businessLabel} helps local customers find the right solution faster with clear service information, trusted expertise, and a simple path to action.`;
 
       const fallbackPages = report?.pages?.map((page) => ({
         slug: page.page.toLowerCase().replace(/\s+/g, "-"),
@@ -205,8 +254,24 @@ export default function SeoPage() {
         seoDescription: page.description || `${businessLabel} provides helpful local ${page.keyword || primaryKeyword} guidance and a simple way to get started with confidence.`,
       })) || [];
 
+      type AutoFixPage = {
+        slug?: string;
+        label?: string;
+        keyword?: string;
+        title?: string;
+        tagline?: string;
+        intro?: string;
+        primaryCta?: string;
+        secondaryCta?: string;
+        benefits?: string[];
+        steps?: string[];
+        closing?: string;
+        seoTitle?: string;
+        seoDescription?: string;
+      };
+
       const draftPages = Array.isArray(parsedDraft?.draft?.pages) && parsedDraft.draft.pages.length ? parsedDraft.draft.pages : fallbackPages;
-      const fixedPages = draftPages.map((page: any, index: number) => {
+      const fixedPages = draftPages.map((page: AutoFixPage, index: number) => {
         const promptPage = report?.pages?.[index] || report?.pages?.[0] || null;
         const serviceKeyword = (promptPage?.keyword || page.keyword || primaryKeyword || "service").trim();
         const pageTitle = `${businessLabel} ${page.label || promptPage?.page || "Services"}${localSuffix}`;
@@ -262,14 +327,10 @@ export default function SeoPage() {
       setStatusMessage(`Auto-fixed website issues: ${issueSummary}. The website builder has been updated.`);
       setReviewQueue((current) => current.filter((key) => !relevantIssues.some((issue) => issue.key === key)));
       setError("");
-    } catch (requestError) {
+    } catch {
       setError("Auto-fix could not be applied. Please try again.");
     }
   };
-
-  useEffect(() => {
-    if (autoApplyFixes && audit) applyAutoFixes();
-  }, [audit, autoApplyFixes]);
 
   const opportunityScore = report
     ? Math.min(99, Math.max(42, 48 + (report.priorityWins.length || 1) * 8 + (report.pages.length || 4) * 3 + report.checklist.filter((item) => item.priority === "High").length * 6))
@@ -278,12 +339,15 @@ export default function SeoPage() {
   return (
     <main className="seo-shell">
       <header className="seo-header">
-        <a href="/" className="back-link">← HelloAI workspace</a>
+        <Link href="/" className="back-link">← HelloAI workspace</Link>
         <div className="seo-brand">
           <span className="eyebrow">GROWTH STUDIO</span>
           <strong>Search visibility</strong>
         </div>
-        <a className="secondary-button" href="/website">Open website builder</a>
+        <div className="seo-header-actions">
+          <Link className="secondary-button" href="/api/auth/google">Connect Google account</Link>
+          <Link className="secondary-button" href="/website">Open website builder</Link>
+        </div>
       </header>
 
       <div className="seo-layout">
@@ -310,8 +374,9 @@ export default function SeoPage() {
               <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Austin, Texas" />
             </label>
             <label>
-              Website to connect
+              Website to audit <span className="optional-label">optional</span>
               <input value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://yourbusiness.com" />
+              <small className="field-help">You can connect Google and load Search Console data without entering a website here. Add a URL only when you want a live crawl audit.</small>
             </label>
 
             {error && <div className="error-banner">{error}</div>}
@@ -334,6 +399,18 @@ export default function SeoPage() {
               )}
             </div>
           </form>
+          <section className="seo-data-card">
+            <span className="eyebrow">REAL PERFORMANCE DATA</span>
+            <strong>Measure what Google sees</strong>
+            <p>Connect Google once, then use Search Console queries as your observed keyword positions instead of guessed rankings.</p>
+            <Link className="secondary-button" href="/api/auth/google">Connect Google account</Link>
+            <select value={searchConsoleSite} onChange={(event) => setSearchConsoleSite(event.target.value)} disabled={!searchConsoleSites.length}>
+              <option value="">Choose a Search Console property</option>
+              {searchConsoleSites.map((site) => <option key={site.siteUrl} value={site.siteUrl}>{site.siteUrl}</option>)}
+            </select>
+            <button className="secondary-button" type="button" onClick={loadSearchConsole} disabled={isLoadingSearchConsole}>{isLoadingSearchConsole ? "Loading Google data..." : "Load Search Console data"}</button>
+            <button className="secondary-button" type="button" onClick={loadBacklinks} disabled={isLoadingBacklinks || (!websiteUrl.trim() && !connectedSite.trim())}>{isLoadingBacklinks ? "Checking backlinks..." : "Check backlink profile"}</button>
+          </section>
           <section className={`seo-connect-card ${connectedSite ? "connected" : ""}`}>
             <span className="eyebrow">SITE CONNECTION</span>
             <strong>{connectedSite ? "SEO is connected" : "Connect your live website"}</strong>
@@ -535,6 +612,21 @@ export default function SeoPage() {
             </section>
           )}
 
+          {searchConsoleRows.length > 0 && (
+            <section className="seo-intelligence-section">
+              <div className="section-heading"><span className="eyebrow">GOOGLE SEARCH CONSOLE / 28 DAYS</span></div>
+              <p className="data-source-note">Observed performance from Google Search Console. Average position is not a guaranteed live rank.</p>
+              <div className="seo-page-table">{searchConsoleRows.slice(0, 20).map((row, index) => <article className="seo-page-row" key={`${row.keys?.join("-") || "query"}-${index}`}><div className="seo-page-header"><span>{row.keys?.[0] || "Unknown query"}</span><small>{row.keys?.[1] || "Site-wide"}</small></div><div className="seo-page-summary"><strong>{Math.round(row.clicks || 0)} clicks · {Math.round(row.impressions || 0)} impressions</strong><p>{((row.ctr || 0) * 100).toFixed(1)}% CTR</p></div><div className="seo-page-intent"><span>Avg. position</span><b>{(row.position || 0).toFixed(1)}</b></div></article>)}</div>
+            </section>
+          )}
+
+          {backlinks && (
+            <section className="seo-intelligence-section">
+              <div className="section-heading"><span className="eyebrow">BACKLINK PROFILE</span></div>
+              {backlinks.configured ? <><p className="data-source-note">Live provider data for {backlinks.target}. Showing up to 100 discovered links.</p><div className="seo-checklist">{(backlinks.backlinks || []).slice(0, 12).map((link, index) => <article key={`${link.source_url || "link"}-${index}`}><span className="priority-tag">Link</span><div><strong>{link.source_title || link.source_url || "Referring page"}</strong><p>{link.anchor || "No anchor text reported"} → {link.target_url || "your site"}</p></div></article>)}</div></> : <p className="data-source-note">{backlinks.message || "Configure a backlink provider to load real referring-domain data."}</p>}
+            </section>
+          )}
+
           {intelligence && (
             <section className="seo-intelligence">
               <div className="seo-intelligence-hero"><span className="eyebrow">AI SEO OPERATING SYSTEM</span><h2>{intelligence.summary}</h2><p>These are opportunities and estimates, not guaranteed rankings. Approve the actions you want HelloAI to execute.</p></div>
@@ -542,6 +634,7 @@ export default function SeoPage() {
               <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">FIX EVERYTHING QUEUE</span></div><div className="seo-opportunity-grid">{[...intelligence.missingServicePages.map((item) => ({ title: item.title, meta: item.keyword, detail: item.reason })), ...intelligence.locationPages.map((item) => ({ title: item.title, meta: item.keyword, detail: item.localAngle })), ...intelligence.landingPages.map((item) => ({ title: item.title, meta: item.audience, detail: item.offer }))].slice(0, 12).map((item) => <article key={item.title}><span>Opportunity</span><h3>{item.title}</h3><strong>{item.meta}</strong><p>{item.detail}</p><button type="button" className="seo-fix-button">Add to build queue</button></article>)}</div></section>
               <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">CONTENT CLUSTERS</span></div><div className="seo-cluster-list">{intelligence.contentClusters.map((cluster) => <article key={cluster.topic}><strong>{cluster.topic}</strong><p>{cluster.supportingArticles.join(" · ")}</p></article>)}</div></section>
               <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">CONVERSION FIXES</span></div><div className="seo-checklist">{intelligence.conversionFixes.map((item) => <article key={item.issue}><span className="priority-tag">{item.impact}</span><div><strong>{item.issue}</strong><p>{item.fix}</p></div></article>)}</div></section>
+              {intelligence.competitorGaps.length > 0 && <section className="seo-intelligence-section"><div className="section-heading"><span className="eyebrow">COMPETITOR OPPORTUNITIES</span></div><div className="seo-checklist">{intelligence.competitorGaps.map((item) => <article key={item.opportunity}><span className="priority-tag">Gap</span><div><strong>{item.opportunity}</strong><p>{item.whyItMatters}</p><small>{item.nextAction}</small></div></article>)}</div></section>}
               <section className="seo-forecast"><div><span className="eyebrow">FORECAST, NOT A PROMISE</span><h3>{intelligence.forecast.currentMonthlyTraffic} → {intelligence.forecast.estimatedMonthlyTraffic} estimated monthly visits</h3><p>{intelligence.forecast.assumptions.join(" ")}</p></div><div><span className="eyebrow">AUTOPILOT RHYTHM</span>{intelligence.autopilot.map((step) => <p key={step}>✓ {step}</p>)}</div></section>
             </section>
           )}

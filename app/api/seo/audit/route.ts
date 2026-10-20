@@ -81,6 +81,9 @@ function analyzePage(html: string, url: string, robotsOk: boolean, sitemapOk: bo
   const missingAltCount = [...html.matchAll(/<img\b([^>]*)>/gi)].filter((match) => !/\balt\s*=\s*["'][^"']*["']/i.test(match[1])).length;
   const hasCanonical = /<link[^>]+rel=["']canonical["']/i.test(html);
   const hasViewport = /<meta[^>]+name=["']viewport["']/i.test(html);
+  const hasStructuredData = /<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/i.test(html);
+  const hasOpenGraph = /<meta[^>]+property=["']og:title["']/i.test(html) && /<meta[^>]+property=["']og:description["']/i.test(html);
+  const internalLinkCount = extractLinks(html, new URL(url)).length;
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi, " ").replace(/\s+/g, " ").trim();
   const wordCount = text ? text.split(" ").length : 0;
   const issues: AuditIssue[] = [
@@ -90,6 +93,9 @@ function analyzePage(html: string, url: string, robotsOk: boolean, sitemapOk: bo
     { key: "images", label: "Image accessibility", status: imageCount === 0 || missingAltCount === 0 ? "pass" : "warning", detail: imageCount ? `${missingAltCount} of ${imageCount} images need alt text` : "No images found", fix: "Add descriptive alt text that explains the image's purpose." },
     { key: "content", label: "Useful page content", status: wordCount >= 300 ? "pass" : "warning", detail: `${wordCount} readable words found`, fix: "Add helpful, specific content answering customer questions." },
     { key: "technical", label: "Technical signals", status: hasCanonical && hasViewport ? "pass" : "warning", detail: `${hasCanonical ? "Canonical found" : "Canonical missing"}; ${hasViewport ? "mobile viewport found" : "mobile viewport missing"}`, fix: "Add canonical and viewport tags to prevent indexing and mobile issues." },
+    { key: "structured-data", label: "Structured data", status: hasStructuredData ? "pass" : "warning", detail: hasStructuredData ? "JSON-LD markup found" : "No JSON-LD markup found", fix: "Add relevant Organization, LocalBusiness, Service, or Article schema where it accurately describes the page." },
+    { key: "social", label: "Social previews", status: hasOpenGraph ? "pass" : "warning", detail: hasOpenGraph ? "Open Graph title and description found" : "Open Graph metadata is incomplete", fix: "Add accurate og:title and og:description tags so shared links have a clear preview." },
+    { key: "internal-links", label: "Internal linking", status: internalLinkCount >= 2 ? "pass" : "warning", detail: `${internalLinkCount} internal links found`, fix: "Link this page to relevant services, supporting content, and a clear next step." },
     { key: "crawl", label: "Crawler access", status: robotsOk && sitemapOk ? "pass" : "warning", detail: `${robotsOk ? "robots.txt found" : "robots.txt missing"}; ${sitemapOk ? "sitemap found" : "sitemap missing"}`, fix: "Publish robots.txt and sitemap.xml so search engines can discover the site." },
   ];
   return { url, title, description, wordCount, score: Math.round((issues.filter((issue) => issue.status === "pass").length / issues.length) * 100), issues };

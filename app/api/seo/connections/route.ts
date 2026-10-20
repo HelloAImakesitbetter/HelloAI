@@ -27,10 +27,11 @@ export async function POST(req: Request) {
     let detail = "";
     if (provider === "wordpress") {
       const baseUrl = text(body.baseUrl).replace(/\/$/, "");
+      const username = text(body.username);
       required(baseUrl, "WordPress URL");
-      await requestJson(`${baseUrl}/wp-json/wp/v2/users/me?context=edit`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+      await requestJson(`${baseUrl}/wp-json/wp/v2/users/me?context=edit`, { headers: { Authorization: username ? `Basic ${Buffer.from(`${username}:${token}`).toString("base64")}` : `Bearer ${token}`, Accept: "application/json" } });
       label = "WordPress";
-      detail = "WordPress credentials verified. Publishing will update page metadata through the REST API.";
+      detail = "WordPress credentials verified. Approved content can be created as a draft through the REST API.";
     } else if (provider === "shopify") {
       const shopDomain = text(body.shopDomain).replace(/^https?:\/\//, "").replace(/\/$/, "");
       required(shopDomain, "Shopify store domain");
