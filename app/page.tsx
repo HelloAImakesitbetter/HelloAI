@@ -81,6 +81,16 @@ const quickActions = [
   { label: "Saved plans", icon: "✓", href: "#agent-runs" },
   { label: "Explore tools", icon: "⌕", href: "#search" },
 ];
+const buildMenuItems = [
+  { label: "Website Builder", description: "Create and manage your website", icon: "◎", href: "/website" },
+  { label: "SEO Engine", description: "Analyze and improve business visibility", icon: "⌕", href: "/seo" },
+  { label: "Chat with HelloAI", description: "Talk through any question or idea", icon: "◌", href: "#chat" },
+  { label: "Image Studio", description: "Create and edit visual assets", icon: "▧", href: "/image" },
+  { label: "Plugins", description: "Connect available integrations", icon: "⌘", href: "/plugins" },
+  { label: "Scheduled Tasks", description: "Manage scheduled business tasks", icon: "◷", href: "/scheduled" },
+  { label: "Saved Chats", description: "Open or delete saved conversations", icon: "▤", href: "#saved-chats" },
+  { label: "Saved Plans", description: "Review and manage agent plans", icon: "✓", href: "#agent-runs" },
+];
 
 export default function Home() {
   const [businessName] = useState(() => {
@@ -429,7 +439,16 @@ export default function Home() {
       <header className="hello-home-header">
         <Link className="hello-home-brand" href="/"><span>H</span><strong>HelloAI</strong></Link>
         <nav className="hello-home-nav" aria-label="Main navigation">
-          <Link href="/website">Build</Link>
+          <details className="hello-home-build-menu">
+            <summary>Build <span aria-hidden="true">⌄</span></summary>
+            <div className="hello-home-build-popover">
+              <div className="hello-home-build-category"><strong>Capabilities</strong><span>Everything you can do with HelloAI</span></div>
+              <div className="hello-home-build-items">
+                {buildMenuItems.map((item) => <Link key={item.label} href={item.href} onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); }}><span className="hello-home-build-icon">{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span></Link>)}
+                <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); setSearchOpen(true); }}><span className="hello-home-build-icon">⌕</span><span><strong>Explore tools</strong><small>Search all HelloAI capabilities</small></span></button>
+              </div>
+            </div>
+          </details>
           <Link href="/seo">Grow</Link>
           <button type="button" onClick={() => setSearchOpen(true)}>Explore</button>
         </nav>
