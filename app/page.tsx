@@ -36,6 +36,24 @@ type SavedConversation = {
   updated_at: string;
 };
 
+const helloAiRoutes: Record<string, string> = {
+  "/": "Home",
+  "/website": "Website Builder",
+  "/seo": "SEO Engine",
+  "/scheduled": "Scheduled Tasks",
+  "/plugins": "Plugins",
+  "/image": "Image Studio",
+  "/login": "Sign in",
+};
+
+function renderChatMessage(content: string) {
+  return content.split(/(\[[^\]]+\]\(\/[^)\s]+\))/g).map((part, index) => {
+    const match = part.match(/^\[([^\]]+)\]\((\/[^)\s]+)\)$/);
+    if (!match || !helloAiRoutes[match[2]]) return part;
+    return <Link key={`${match[2]}-${index}`} href={match[2]}>{match[1]}</Link>;
+  });
+}
+
 async function fetchAgentRuns(accessToken: string): Promise<AgentRun[]> {
   const response = await fetch("/api/agent/runs", { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await response.json();
@@ -429,7 +447,6 @@ export default function Home() {
       <aside className="task-workspace-sidebar">
         <div className="task-brand"><span>H</span><strong>HelloAI</strong></div>
         <button className="task-search" type="button" onClick={() => setSearchOpen(true)}>⌕ <span>Search</span><kbd>⌘ K</kbd></button>
-        <Link className="task-new-button" href="/website">＋ New task</Link>
         <nav className="task-nav"><Link className="selected" href="/">⌂ <span>Home</span></Link><Link href="/website">▤ <span>Website Builder</span></Link><Link href="/seo">⌕ <span>SEO Engine</span></Link><Link href="/scheduled">◷ <span>Scheduled</span></Link><Link href="/plugins">⌘ <span>Plugins</span></Link><Link href="/seo">▣ <span>Notetaker</span><em>Free</em></Link><Link href="/seo">••• <span>Explore</span></Link></nav>
         <div className="task-sidebar-section"><span>Projects</span><button type="button">＋</button><p>No projects yet</p></div>
         <div className="task-sidebar-section history"><span>History</span><p className="history-item"><i />{businessName}</p></div>
@@ -445,7 +462,7 @@ export default function Home() {
           <p className="task-hero-intro">Ask about anything, think something through, or work on a project together. Your chats stay private to this session unless you choose to save one.</p>
           <div className="task-composer">
             {conversation.length > 0
-              ? <div className="task-conversation" aria-live="polite">{conversation.map((message, index) => <article className={`task-chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "HelloAI" : "You"}</span><p>{message.content}</p></article>)}</div>
+              ? <div className="task-conversation" aria-live="polite">{conversation.map((message, index) => <article className={`task-chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "HelloAI" : "You"}</span><p>{message.role === "assistant" ? renderChatMessage(message.content) : message.content}</p></article>)}</div>
               : <div className="task-chat-welcome"><span className="task-chat-avatar">H</span><div><strong>Hello, I’m HelloAI.</strong><p>Ask me a question, share an idea, or tell me what you’re working on.</p></div></div>}
             {isThinking && <p className="task-chat-thinking" role="status">HelloAI is thinking…</p>}
             <textarea aria-label="Message HelloAI" value={task} onChange={(event) => setTask(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitTask(); } }} placeholder="Message HelloAI about anything..." />

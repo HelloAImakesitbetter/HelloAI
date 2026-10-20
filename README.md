@@ -4,7 +4,7 @@ This project is a Next.js app for website strategy, SEO planning, publishing set
 
 ## Features in this app
 
-- Task-first home workspace
+- General-purpose Home assistant with opt-in saved conversations and links to app workflows
 - Website builder workflow
 - SEO engine and audit flow
 - Scheduled tasks manager
