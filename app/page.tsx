@@ -81,6 +81,14 @@ const quickActions = [
   { label: "Saved plans", icon: "✓", href: "#agent-runs" },
   { label: "Explore tools", icon: "⌕", href: "#search" },
 ];
+const growQuickActions = [
+  { label: "Booking sites", icon: "▣", prompt: "Help me improve my booking website and make it easier for customers to book." },
+  { label: "Quotes", icon: "＄", prompt: "Help me create a clear quote and lead follow-up process for my business." },
+  { label: "Retention", icon: "↻", prompt: "Suggest practical ways to improve customer retention for my business." },
+  { label: "Invoices", icon: "▤", prompt: "Help me design a simple invoicing and payment follow-up workflow." },
+  { label: "Social posts", icon: "▧", prompt: "Help me plan social media posts that fit my business and audience." },
+  { label: "Site updates", icon: "◎", prompt: "Help me decide what to improve or update on my business website." },
+];
 const buildMenuItems = [
   { label: "Website Builder", description: "Create and manage your website", icon: "◎", href: "/website" },
   { label: "SEO Engine", description: "Analyze and improve business visibility", icon: "⌕", href: "/seo" },
@@ -90,6 +98,49 @@ const buildMenuItems = [
   { label: "Scheduled Tasks", description: "Manage scheduled business tasks", icon: "◷", href: "/scheduled" },
   { label: "Saved Chats", description: "Open or delete saved conversations", icon: "▤", href: "#saved-chats" },
   { label: "Saved Plans", description: "Review and manage agent plans", icon: "✓", href: "#agent-runs" },
+];
+const growCategories = [
+  {
+    label: "Running Ads",
+    items: [
+      { label: "ChatGPT Ads", description: "Campaign ideas and ad copy", icon: "◉", prompt: "Help me plan an advertising campaign for ChatGPT Ads. Suggest an audience, message, and draft ad copy; do not publish anything." },
+      { label: "Meta Ads", description: "Ideas for Facebook and Instagram", icon: "f", prompt: "Help me plan a Meta ads campaign for my business, including audience ideas and draft ad copy. Do not publish anything." },
+      { label: "Google Ads", description: "Search campaign planning", icon: "G", prompt: "Help me plan a Google Search Ads campaign, including keyword themes and draft ad copy. Do not publish anything." },
+      { label: "LinkedIn Ads", description: "Reach a professional audience", icon: "in", prompt: "Help me plan a LinkedIn ads campaign for my business, including audience ideas and draft ad copy. Do not publish anything." },
+      { label: "TikTok Ads", description: "Short-form campaign concepts", icon: "♪", prompt: "Help me plan a TikTok ads campaign, including a short video concept and draft script. Do not publish anything." },
+    ],
+  },
+  {
+    label: "Social Media",
+    items: [
+      { label: "Social posts", description: "Plan posts for your channels", icon: "▧", prompt: growQuickActions[4].prompt },
+      { label: "Content calendar", description: "Build a practical posting plan", icon: "▦", prompt: "Help me create a realistic social media content calendar for my business." },
+      { label: "Social post ideas", description: "Find ideas worth sharing", icon: "✳", prompt: "Suggest engaging social media post ideas for my business and target audience." },
+    ],
+  },
+  {
+    label: "Cold Outreach",
+    items: [
+      { label: "Outreach emails", description: "Write thoughtful first-contact emails", icon: "✉", prompt: "Help me write respectful, personalized cold outreach emails for my business." },
+      { label: "Follow-up sequence", description: "Plan helpful follow-ups", icon: "↗", prompt: "Help me create a concise, respectful follow-up sequence for prospective customers." },
+    ],
+  },
+  {
+    label: "Social Listening",
+    items: [
+      { label: "Review responses", description: "Respond to customer feedback", icon: "☆", prompt: "Help me draft thoughtful responses to customer reviews. I will provide the reviews." },
+      { label: "Feedback themes", description: "Understand what customers say", icon: "☷", prompt: "Help me identify themes and opportunities from customer feedback I provide." },
+    ],
+  },
+  {
+    label: "Organic Growth",
+    items: [
+      { label: "SEO Engine", description: "Find ways to improve visibility", icon: "⌕", prompt: "Help me improve my business's organic search visibility and prioritize practical SEO steps." },
+      { label: "Booking sites", description: "Improve website conversion", icon: "▣", prompt: growQuickActions[0].prompt },
+      { label: "Site updates", description: "Plan useful website improvements", icon: "◎", prompt: growQuickActions[5].prompt },
+      { label: "Retention", description: "Encourage repeat customers", icon: "↻", prompt: growQuickActions[2].prompt },
+    ],
+  },
 ];
 
 export default function Home() {
@@ -112,6 +163,7 @@ export default function Home() {
   const [isSavingConversation, setIsSavingConversation] = useState(false);
   const [conversationNotice, setConversationNotice] = useState("");
   const [mode, setMode] = useState<"build" | "grow">("build");
+  const [activeGrowCategory, setActiveGrowCategory] = useState(growCategories[0].label);
   const [isThinking, setIsThinking] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -434,6 +486,16 @@ export default function Home() {
     }
   };
 
+  const selectGrowPrompt = (prompt: string, menu?: HTMLDetailsElement | null) => {
+    menu?.removeAttribute("open");
+    setTask(prompt);
+    window.requestAnimationFrame(() => {
+      const composer = document.getElementById("chat");
+      composer?.scrollIntoView({ behavior: "smooth", block: "center" });
+      composer?.querySelector("textarea")?.focus();
+    });
+  };
+
   return (
     <main className="task-workspace-shell hello-home-shell">
       <header className="hello-home-header">
@@ -449,7 +511,18 @@ export default function Home() {
               </div>
             </div>
           </details>
-          <Link href="/seo">Grow</Link>
+          <details className="hello-home-build-menu hello-home-grow-menu">
+            <summary>Grow <span aria-hidden="true">⌄</span></summary>
+            <div className="hello-home-build-popover hello-home-grow-popover">
+              <div className="hello-home-grow-categories" aria-label="Growth categories">
+                {growCategories.map((category) => <button className={activeGrowCategory === category.label ? "active" : ""} key={category.label} type="button" aria-pressed={activeGrowCategory === category.label} onClick={() => setActiveGrowCategory(category.label)}>{category.label}<span>›</span></button>)}
+              </div>
+              <div className="hello-home-build-items">
+                {growCategories.find((category) => category.label === activeGrowCategory)?.items.map((item) => <button key={item.label} type="button" onClick={(event) => selectGrowPrompt(item.prompt, event.currentTarget.closest("details"))}><span className="hello-home-build-icon">{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span></button>)}
+                <p className="hello-home-grow-note">Ideas and drafts only. HelloAI does not connect to or launch ad accounts.</p>
+              </div>
+            </div>
+          </details>
           <button type="button" onClick={() => setSearchOpen(true)}>Explore</button>
         </nav>
         <div className="hello-home-header-action">
@@ -461,7 +534,7 @@ export default function Home() {
           <span className="eyebrow">YOUR AI WORKSPACE</span>
           <h1>Build it. Run it.<br />Grow with HelloAI.</h1>
           <p className="task-hero-intro">One AI assistant to explore ideas, make useful things, and keep your business moving.</p>
-          <div className="task-mode-switch hello-home-mode-switch"><button className={mode === "build" ? "active" : ""} type="button" onClick={() => setMode("build")}>Build</button><button className={mode === "grow" ? "active" : ""} type="button" onClick={() => setMode("grow")}>Grow</button></div>
+          <div className="task-mode-switch hello-home-mode-switch"><button className={mode === "build" ? "active" : ""} type="button" aria-pressed={mode === "build"} onClick={() => setMode("build")}>Build</button><button className={mode === "grow" ? "active" : ""} type="button" aria-pressed={mode === "grow"} onClick={() => setMode("grow")}>Grow</button></div>
           <div className="task-composer" id="chat">
             {conversation.length > 0
               ? <div className="task-conversation" aria-live="polite">{conversation.map((message, index) => <article className={`task-chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "HelloAI" : "You"}</span><p>{message.role === "assistant" ? renderChatMessage(message.content) : message.content}</p></article>)}</div>
@@ -482,9 +555,11 @@ export default function Home() {
             </div>
           </div>
           <nav className="hello-home-quick-actions" aria-label="Quick actions">
-            {quickActions.map((action) => action.href === "#search"
-              ? <button className="hello-home-action" key={action.label} type="button" onClick={() => setSearchOpen(true)}><span>{action.icon}</span>{action.label}</button>
-              : <Link className="hello-home-action" key={action.label} href={action.href}><span>{action.icon}</span>{action.label}</Link>)}
+            {mode === "build"
+              ? quickActions.map((action) => action.href === "#search"
+                ? <button className="hello-home-action" key={action.label} type="button" onClick={() => setSearchOpen(true)}><span>{action.icon}</span>{action.label}</button>
+                : <Link className="hello-home-action" key={action.label} href={action.href}><span>{action.icon}</span>{action.label}</Link>)
+              : growQuickActions.map((action) => <button className="hello-home-action" key={action.label} type="button" onClick={() => selectGrowPrompt(action.prompt)}><span>{action.icon}</span>{action.label}</button>)}
           </nav>
           <details className="task-saved-conversations" id="saved-chats">
             <summary>Saved chats ({savedConversations.length}){savedConversations.length > 0 && " — select a chat to open or delete it"}</summary>
