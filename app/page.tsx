@@ -110,6 +110,7 @@ export default function Home() {
   const [selectedRunId, setSelectedRunId] = useState("");
   const [isPlanning, setIsPlanning] = useState(false);
   const [actingRunId, setActingRunId] = useState("");
+  const [deletingRunId, setDeletingRunId] = useState("");
   const [agentMessage, setAgentMessage] = useState(() => supabase ? "" : "Supabase is not configured. Add the project URL and public key to .env.local, then restart the app.");
   const [agentError, setAgentError] = useState("");
 
@@ -315,6 +316,46 @@ export default function Home() {
     }
   };
 
+  const deleteAllSavedConversations = async () => {
+    if (!supabase || !chatUserId || savedConversations.length === 0) return;
+    if (!window.confirm(`Delete all ${savedConversations.length} saved chats? This cannot be undone.`)) return;
+    setAgentError("");
+    const { error } = await supabase.from("chat_conversations").delete().eq("user_id", chatUserId);
+    if (error) {
+      setAgentError(`Could not delete saved chats: ${error.message}`);
+      return;
+    }
+    setSavedConversations([]);
+    if (savedConversations.some((saved) => saved.id === activeConversationId)) {
+      setActiveConversationId(null);
+      setConversation([]);
+    }
+    setConversationNotice("All saved chats were deleted.");
+  };
+
+  const deleteAgentRun = async (run: AgentRun) => {
+    if (!agentAccessToken || deletingRunId || run.status === "queued" || run.status === "running") return;
+    if (!window.confirm(`Delete the saved plan “${run.goal}” and its results? This cannot be undone.`)) return;
+    setDeletingRunId(run.id);
+    setAgentError("");
+    try {
+      const response = await fetch(`/api/agent/runs/${run.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${agentAccessToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not delete saved plan");
+      const remainingRuns = agentRuns.filter((item) => item.id !== run.id);
+      setAgentRuns(remainingRuns);
+      if (selectedRunId === run.id) setSelectedRunId(remainingRuns[0]?.id || "");
+      setAgentMessage("Saved plan and its results deleted.");
+    } catch (deleteError) {
+      setAgentError(deleteError instanceof Error ? deleteError.message : "Could not delete saved plan");
+    } finally {
+      setDeletingRunId("");
+    }
+  };
+
   const createPlan = async () => {
     if (!canPrepareWebsitePlan || isPlanning) return;
     if (!supabase) {
@@ -422,10 +463,10 @@ export default function Home() {
             </div>
           </div>
           <details className="task-saved-conversations">
-            <summary>Saved chats ({savedConversations.length})</summary>
+            <summary>Saved chats ({savedConversations.length}){savedConversations.length > 0 && " — select a chat to open or delete it"}</summary>
             {conversationNotice.startsWith("Saved chats are unavailable") && <p className="task-chat-notice" role="status">{conversationNotice}</p>}
             {savedConversations.length > 0
-              ? <div className="task-saved-chat-list">{savedConversations.map((saved) => <div className="task-saved-chat" key={saved.id}><button type="button" onClick={() => openSavedConversation(saved)}><strong>{saved.title}</strong><small>Saved {new Date(saved.updated_at).toLocaleDateString()}</small></button><button className="task-delete-chat" type="button" aria-label={`Delete saved chat ${saved.title}`} onClick={() => void deleteSavedConversation(saved.id)}>Delete</button></div>)}</div>
+              ? <><div className="task-saved-chat-list">{savedConversations.map((saved) => <div className="task-saved-chat" key={saved.id}><button type="button" onClick={() => openSavedConversation(saved)}><strong>{saved.title}</strong><small>Saved {new Date(saved.updated_at).toLocaleDateString()}</small></button><button className="task-delete-chat" type="button" aria-label={`Delete saved chat ${saved.title}`} onClick={() => void deleteSavedConversation(saved.id)}>Delete</button></div>)}</div><button className="task-delete-all-chats" type="button" onClick={() => void deleteAllSavedConversations()}>Delete all saved chats</button></>
               : <p className="task-chat-notice">Saved conversations will appear here. Nothing is stored until you select “Save conversation”.</p>}
           </details>
         </section>
@@ -433,7 +474,7 @@ export default function Home() {
         <section className="task-agent-history" aria-labelledby="agent-history-heading">
           <div className="task-agent-history-heading"><div><span className="eyebrow">AGENT RUNS</span><h2 id="agent-history-heading">Saved plans</h2></div><span>{agentRuns.length} / 20</span></div>
           {agentRuns.length === 0 ? <p className="task-agent-empty">{agentError || agentMessage || "Sign in to create and keep task plans."} {!agentAccessToken && supabase && <Link href="/login">Sign in →</Link>}</p> : <div className="task-agent-history-layout">
-            <div className="task-agent-run-list">{agentRuns.map((run) => <button className={run.id === selectedRun?.id ? "task-agent-run selected" : "task-agent-run"} key={run.id} type="button" onClick={() => setSelectedRunId(run.id)}><span>{run.goal}</span><small><b>{run.status}</b> · {new Date(run.createdAt).toLocaleDateString()}</small></button>)}</div>
+            <div className="task-agent-run-list">{agentRuns.map((run) => <div className={run.id === selectedRun?.id ? "task-agent-run-row selected" : "task-agent-run-row"} key={run.id}><button className="task-agent-run" type="button" onClick={() => setSelectedRunId(run.id)}><span>{run.goal}</span><small><b>{run.status}</b> · {new Date(run.createdAt).toLocaleDateString()}</small></button><button className="task-delete-chat task-delete-run" type="button" disabled={!agentAccessToken || deletingRunId === run.id || run.status === "queued" || run.status === "running"} aria-label={`Delete saved plan ${run.goal}`} title={run.status === "queued" || run.status === "running" ? "Cancel and wait for this run to stop before deleting" : "Delete saved plan"} onClick={() => void deleteAgentRun(run)}>{deletingRunId === run.id ? "Deleting..." : "Delete"}</button></div>)}</div>
             {selectedRun && <article className="task-agent-run-detail"><div className="task-agent-run-title"><h3>{selectedRun.goal}</h3><span className="task-agent-status">{selectedRun.status}</span></div><p className="task-agent-notice">{selectedRun.status === "planned" ? "Nothing has been generated yet. Approving starts website draft generation; it will not publish the site." : selectedRun.status === "queued" || selectedRun.status === "running" ? "The background worker is processing this task." : selectedRun.status === "completed" ? "Verified website draft saved in this run." : selectedRun.status === "failed" ? "The task failed; see the error below." : selectedRun.status === "cancelled" ? "This run was cancelled." : `Run status: ${selectedRun.status}.`}</p>{selectedRun.status === "planned" && <button className="primary-button" type="button" disabled={actingRunId === selectedRun.id} onClick={() => void updateRun(selectedRun, "start")}>{actingRunId === selectedRun.id ? "Starting..." : "Approve & generate draft"}</button>}{(selectedRun.status === "queued" || selectedRun.status === "running") && <button className="secondary-button" type="button" disabled={actingRunId === selectedRun.id || selectedRun.cancelRequested} onClick={() => void updateRun(selectedRun, "cancel")}>{selectedRun.cancelRequested ? "Cancellation requested" : actingRunId === selectedRun.id ? "Cancelling..." : "Cancel run"}</button>}<strong>Success criteria</strong><ul>{selectedRun.successCriteria.map((criterion) => <li key={criterion}>{criterion}</li>)}</ul><strong>Planned steps</strong><ol>{selectedRun.tasks.map((agentTask) => <li key={agentTask.key}><span>{agentTask.title}</span><small>{agentTask.toolName} · {agentTask.status}{agentTask.requiresApproval ? " · approval required" : ""}</small>{agentTask.errorMessage && <small className="task-agent-run-error">{agentTask.errorMessage}</small>}{agentTask.evidence && <small>Verified {agentTask.evidence.pageCount} pages; home page {agentTask.evidence.hasHomePage ? "present" : "missing"}.</small>}{agentTask.result?.pages && <ul className="task-agent-page-results">{agentTask.result.pages.map((page) => <li key={page.slug}>{page.label}: {page.title}</li>)}</ul>}</li>)}</ol></article>}
           </div>}
         </section>
