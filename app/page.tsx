@@ -113,6 +113,11 @@ const growCategories = [
   {
     label: "Social Media",
     items: [
+      { label: "Instagram", description: "Create and plan Instagram posts", icon: "◎", prompt: "Help me plan Instagram content for my business, including post and Reels ideas, captions, and a realistic schedule. Do not publish anything." },
+      { label: "Facebook", description: "Plan engaging Facebook content", icon: "f", prompt: "Help me plan engaging Facebook content for my business, including post ideas, captions, and a realistic schedule. Do not publish anything." },
+      { label: "X / Twitter", description: "Plan posts and conversations", icon: "𝕏", prompt: "Help me plan a series of concise X (Twitter) posts for my business, including conversation starters. Do not publish anything." },
+      { label: "LinkedIn", description: "Build a professional presence", icon: "in", prompt: "Help me plan professional LinkedIn content for my business, including post ideas and a realistic schedule. Do not publish anything." },
+      { label: "TikTok", description: "Create short-form video ideas", icon: "♪", prompt: "Help me plan TikTok content for my business, including short-form video concepts, hooks, and draft scripts. Do not publish anything." },
       { label: "Social posts", description: "Plan posts for your channels", icon: "▧", prompt: growQuickActions[4].prompt },
       { label: "Content calendar", description: "Build a practical posting plan", icon: "▦", prompt: "Help me create a realistic social media content calendar for my business." },
       { label: "Social post ideas", description: "Find ideas worth sharing", icon: "✳", prompt: "Suggest engaging social media post ideas for my business and target audience." },
