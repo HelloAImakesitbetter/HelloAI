@@ -402,12 +402,6 @@ export default function Home() {
           <span className="eyebrow">YOUR HELLOAI ASSISTANT</span>
           <h1>How can I help?</h1>
           <p className="task-hero-intro">Ask about anything, think something through, or work on a project together. Your chats stay private to this session unless you choose to save one.</p>
-          <div className="task-chat-actions">
-            {conversation.length > 0 && <button className="task-reset-conversation" type="button" onClick={startNewConversation}>New chat</button>}
-            {conversation.length > 0 && (chatUserId
-              ? <button className="task-save-conversation" type="button" onClick={() => void saveConversation()} disabled={isSavingConversation}>{isSavingConversation ? "Saving..." : activeConversationId ? "Save changes" : "Save conversation"}</button>
-              : <Link className="task-auth-link" href="/login">Sign in to save this chat</Link>)}
-          </div>
           <div className="task-composer">
             {conversation.length > 0
               ? <div className="task-conversation" aria-live="polite">{conversation.map((message, index) => <article className={`task-chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "HelloAI" : "You"}</span><p>{message.content}</p></article>)}</div>
@@ -418,8 +412,11 @@ export default function Home() {
             {agentError && <div className="task-agent-error" role="alert">{agentError}</div>}
             {conversationNotice && <p className="task-chat-notice" role="status">{conversationNotice}</p>}
             <div className="task-composer-footer">
-              <span>Chats are not saved unless you choose to save them.</span>
-              <span className="task-composer-spacer" />
+              <span className="task-save-explainer">Chats are not saved unless you choose to save them.</span>
+              {conversation.length > 0 && <button className="task-reset-conversation" type="button" onClick={startNewConversation}>New chat</button>}
+              {conversation.length > 0 && (chatUserId
+                ? <button className="task-save-conversation" type="button" onClick={() => void saveConversation()} disabled={isSavingConversation}>{isSavingConversation ? "Saving..." : activeConversationId ? "Save changes" : "Save conversation"}</button>
+                : <Link className="task-auth-link" href="/login">Sign in to save</Link>)}
               {canPrepareWebsitePlan && <button className="task-plan-button" type="button" onClick={() => void createPlan()} disabled={isPlanning || !agentAccessToken}>{isPlanning ? "Preparing..." : "Prepare website plan"}</button>}
               <button className="task-submit" type="button" aria-label="Send message to HelloAI" onClick={() => void submitTask()} disabled={!task.trim() || isThinking}>{isThinking ? "…" : "→"}</button>
             </div>
