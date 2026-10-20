@@ -61,23 +61,6 @@ async function fetchAgentRuns(accessToken: string): Promise<AgentRun[]> {
   return data.runs as AgentRun[];
 }
 
-const toolGroups = {
-  code: [
-  { label: "Websites", icon: "◎", href: "/website", tone: "blue" },
-  { label: "Apps", icon: "▯", href: "/website", tone: "violet" },
-  ],
-  productivity: [
-  { label: "Slides", icon: "▤", href: "/website", tone: "amber" },
-  { label: "Reports", icon: "▥", href: "/seo", tone: "blue" },
-  { label: "Sheets", icon: "▦", href: "/seo", tone: "green" },
-  { label: "Workflows", icon: "⌘", href: "/scheduled", tone: "violet" },
-  ],
-  content: [
-  { label: "Images", icon: "◌", href: "/image", tone: "pink" },
-  { label: "Audio", icon: "◉", href: "/seo", tone: "cyan" },
-  { label: "Carousels", icon: "▧", href: "/website", tone: "orange" },
-  ],
-};
 const searchItems = [
   { label: "Website Builder", detail: "Create pages, services, FAQs, and booking paths", href: "/website" },
   { label: "SEO Engine", detail: "Audit pages, find opportunities, and apply fixes", href: "/seo" },
@@ -86,6 +69,17 @@ const searchItems = [
   { label: "Lead Generation", detail: "Create quote, booking, call, and contact paths", href: "/website" },
   { label: "Scheduled Tasks", detail: "Manage recurring SEO and growth work", href: "/scheduled" },
   { label: "Image Studio", detail: "Create and edit visual assets", href: "/image" },
+];
+const quickActions = [
+  { label: "Websites", icon: "◎", href: "/website" },
+  { label: "SEO Engine", icon: "⌕", href: "/seo" },
+  { label: "Chat with HelloAI", icon: "◌", href: "#chat" },
+  { label: "Image Studio", icon: "▧", href: "/image" },
+  { label: "Plugins", icon: "⌘", href: "/plugins" },
+  { label: "Scheduled tasks", icon: "◷", href: "/scheduled" },
+  { label: "Saved chats", icon: "▤", href: "#saved-chats" },
+  { label: "Saved plans", icon: "✓", href: "#agent-runs" },
+  { label: "Explore tools", icon: "⌕", href: "#search" },
 ];
 
 export default function Home() {
@@ -100,17 +94,6 @@ export default function Home() {
       return "Untitled workspace";
     }
   });
-  const [draftCount] = useState(() => {
-    if (typeof window === "undefined") return 0;
-    try {
-      const saved = window.localStorage.getItem("helloai-website-draft");
-      if (!saved) return 0;
-      const project = JSON.parse(saved) as { draft?: { pages?: unknown[] } };
-      return project.draft?.pages?.length || 0;
-    } catch {
-      return 0;
-    }
-  });
   const [task, setTask] = useState("");
   const [conversation, setConversation] = useState<ChatMessage[]>([]);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
@@ -119,7 +102,6 @@ export default function Home() {
   const [isSavingConversation, setIsSavingConversation] = useState(false);
   const [conversationNotice, setConversationNotice] = useState("");
   const [mode, setMode] = useState<"build" | "grow">("build");
-  const [activeCategory, setActiveCategory] = useState<"code" | "productivity" | "content">("code");
   const [isThinking, setIsThinking] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -443,24 +425,25 @@ export default function Home() {
   };
 
   return (
-    <main className="task-workspace-shell">
-      <aside className="task-workspace-sidebar">
-        <div className="task-brand"><span>H</span><strong>HelloAI</strong></div>
-        <button className="task-search" type="button" onClick={() => setSearchOpen(true)}>⌕ <span>Search</span><kbd>⌘ K</kbd></button>
-        <nav className="task-nav"><Link className="selected" href="/">⌂ <span>Home</span></Link><Link href="/website">▤ <span>Website Builder</span></Link><Link href="/seo">⌕ <span>SEO Engine</span></Link><Link href="/scheduled">◷ <span>Scheduled</span></Link><Link href="/plugins">⌘ <span>Plugins</span></Link><Link href="/seo">▣ <span>Notetaker</span><em>Free</em></Link><Link href="/seo">••• <span>Explore</span></Link></nav>
-        <div className="task-sidebar-section"><span>Projects</span><button type="button">＋</button><p>No projects yet</p></div>
-        <div className="task-sidebar-section history"><span>History</span><p className="history-item"><i />{businessName}</p></div>
-        <div className="task-account"><span>A</span><div><strong>Account</strong><small>Personal workspace</small></div><b>•••</b></div>
-      </aside>
-
+    <main className="task-workspace-shell hello-home-shell">
+      <header className="hello-home-header">
+        <Link className="hello-home-brand" href="/"><span>H</span><strong>HelloAI</strong></Link>
+        <nav className="hello-home-nav" aria-label="Main navigation">
+          <Link href="/website">Build</Link>
+          <Link href="/seo">Grow</Link>
+          <button type="button" onClick={() => setSearchOpen(true)}>Explore</button>
+        </nav>
+        <div className="hello-home-header-action">
+          {chatUserId ? <span className="task-credit">Free plan</span> : <Link href="/login">Get started</Link>}
+        </div>
+      </header>
       <section className="task-workspace-main">
-        <header className="task-topbar"><span className="task-mobile-brand">HelloAI</span><span className="task-topbar-spacer" /><button type="button">◌</button><button type="button">?</button><span className="task-credit">Free plan</span></header>
-        <div className="task-mode-switch"><button className={mode === "build" ? "active" : ""} type="button" onClick={() => setMode("build")}>Build</button><button className={mode === "grow" ? "active" : ""} type="button" onClick={() => setMode("grow")}>Grow</button></div>
         <section className="task-hero">
-          <span className="eyebrow">YOUR HELLOAI ASSISTANT</span>
-          <h1>How can I help?</h1>
-          <p className="task-hero-intro">Ask about anything, think something through, or work on a project together. Your chats stay private to this session unless you choose to save one.</p>
-          <div className="task-composer">
+          <span className="eyebrow">YOUR AI WORKSPACE</span>
+          <h1>Build it. Run it.<br />Grow with HelloAI.</h1>
+          <p className="task-hero-intro">One AI assistant to explore ideas, make useful things, and keep your business moving.</p>
+          <div className="task-mode-switch hello-home-mode-switch"><button className={mode === "build" ? "active" : ""} type="button" onClick={() => setMode("build")}>Build</button><button className={mode === "grow" ? "active" : ""} type="button" onClick={() => setMode("grow")}>Grow</button></div>
+          <div className="task-composer" id="chat">
             {conversation.length > 0
               ? <div className="task-conversation" aria-live="polite">{conversation.map((message, index) => <article className={`task-chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "HelloAI" : "You"}</span><p>{message.role === "assistant" ? renderChatMessage(message.content) : message.content}</p></article>)}</div>
               : <div className="task-chat-welcome"><span className="task-chat-avatar">H</span><div><strong>Hello, I’m HelloAI.</strong><p>Ask me a question, share an idea, or tell me what you’re working on.</p></div></div>}
@@ -479,7 +462,12 @@ export default function Home() {
               <button className="task-submit" type="button" aria-label="Send message to HelloAI" onClick={() => void submitTask()} disabled={!task.trim() || isThinking}>{isThinking ? "…" : "→"}</button>
             </div>
           </div>
-          <details className="task-saved-conversations">
+          <nav className="hello-home-quick-actions" aria-label="Quick actions">
+            {quickActions.map((action) => action.href === "#search"
+              ? <button className="hello-home-action" key={action.label} type="button" onClick={() => setSearchOpen(true)}><span>{action.icon}</span>{action.label}</button>
+              : <Link className="hello-home-action" key={action.label} href={action.href}><span>{action.icon}</span>{action.label}</Link>)}
+          </nav>
+          <details className="task-saved-conversations" id="saved-chats">
             <summary>Saved chats ({savedConversations.length}){savedConversations.length > 0 && " — select a chat to open or delete it"}</summary>
             {conversationNotice.startsWith("Saved chats are unavailable") && <p className="task-chat-notice" role="status">{conversationNotice}</p>}
             {savedConversations.length > 0
@@ -488,7 +476,7 @@ export default function Home() {
           </details>
         </section>
 
-        <section className="task-agent-history" aria-labelledby="agent-history-heading">
+        <section className="task-agent-history" id="agent-runs" aria-labelledby="agent-history-heading">
           <div className="task-agent-history-heading"><div><span className="eyebrow">AGENT RUNS</span><h2 id="agent-history-heading">Saved plans</h2></div><span>{agentRuns.length} / 20</span></div>
           {agentRuns.length === 0 ? <p className="task-agent-empty">{agentError || agentMessage || "Sign in to create and keep task plans."} {!agentAccessToken && supabase && <Link href="/login">Sign in →</Link>}</p> : <div className="task-agent-history-layout">
             <div className="task-agent-run-list">{agentRuns.map((run) => <div className={run.id === selectedRun?.id ? "task-agent-run-row selected" : "task-agent-run-row"} key={run.id}><button className="task-agent-run" type="button" onClick={() => setSelectedRunId(run.id)}><span>{run.goal}</span><small><b>{run.status}</b> · {new Date(run.createdAt).toLocaleDateString()}</small></button><button className="task-delete-chat task-delete-run" type="button" disabled={!agentAccessToken || deletingRunId === run.id || run.status === "queued" || run.status === "running"} aria-label={`Delete saved plan ${run.goal}`} title={run.status === "queued" || run.status === "running" ? "Cancel and wait for this run to stop before deleting" : "Delete saved plan"} onClick={() => void deleteAgentRun(run)}>{deletingRunId === run.id ? "Deleting..." : "Delete"}</button></div>)}</div>
@@ -496,9 +484,6 @@ export default function Home() {
           </div>}
         </section>
 
-        <section className="task-tool-groups">{(["code", "productivity", "content"] as const).map((category) => <div className="task-group" key={category}><button className="task-group-heading" type="button" onClick={() => setActiveCategory(activeCategory === category ? category : category)}><span>{category === "code" ? "Code" : category === "productivity" ? "Productivity" : "Content creation"}</span><b>⌄</b></button>{activeCategory === category ? <div className="task-tool-grid">{toolGroups[category].map((tool) => <Link className={`task-tool-card ${tool.tone}`} key={tool.label} href={tool.href}><span>{tool.icon}</span><strong>{tool.label}</strong></Link>)}</div> : <div className="task-group-summary">{toolGroups[category].map((tool) => tool.label).join(" · ")}</div>}</div>)}</section>
-
-        <section className="task-bottom-grid"><article><span className="eyebrow">QUICK START</span><h2>Make the next useful thing.</h2><p>Start with the website builder or ask the growth agent to audit, plan, and prioritize your business.</p><div className="task-bottom-links"><Link href="/website">Build a website →</Link><Link href="/seo">Grow my business →</Link></div></article><article className="task-project-card"><span className="eyebrow">CURRENT PROJECT</span><strong>{businessName}</strong><p>{draftCount ? `${draftCount} website pages in your draft` : "No active project yet"}</p><Link href="/website">Open project →</Link></article></section>
       </section>
       {searchOpen && <div className="task-search-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}><section className="task-search-dialog" role="dialog" aria-modal="true" aria-label="Search HelloAI"><div className="task-search-input-wrap"><span>⌕</span><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search HelloAI" /><kbd>Esc</kbd></div><div className="task-search-results">{searchItems.filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())).map((item) => <Link key={item.label} href={item.href} onClick={() => setSearchOpen(false)}><span>→</span><div><strong>{item.label}</strong><small>{item.detail}</small></div></Link>)}{searchItems.every((item) => !`${item.label} ${item.detail}`.toLowerCase().includes(searchQuery.toLowerCase())) && <p className="task-search-empty">No matching HelloAI feature found.</p>}</div></section></div>}
     </main>
