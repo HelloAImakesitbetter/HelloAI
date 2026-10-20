@@ -13,29 +13,29 @@ export async function POST(req: Request) {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    const { messages, businessName, description, progress } = (await req.json()) as {
+    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (contentLength > 64_000) return Response.json({ error: "Conversation is too large. Start a new chat and try again." }, { status: 413 });
+    const bodyText = await req.text();
+    if (bodyText.length > 64_000) return Response.json({ error: "Conversation is too large. Start a new chat and try again." }, { status: 413 });
+    const { messages, businessName, description, progress } = JSON.parse(bodyText) as {
       messages?: ChatMessage[];
       businessName?: string;
       description?: string;
       progress?: string;
     };
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
       return Response.json({ error: "A message is required" }, { status: 400 });
     }
 
-    const safeMessages = messages
-      .filter(
-        (message) =>
-          (message.role === "user" || message.role === "assistant") &&
-          typeof message.content === "string" &&
-          message.content.trim().length > 0
-      )
-      .slice(-8)
-      .map((message) => ({ ...message, content: message.content.trim().slice(0, 2400) }));
-
-    if (safeMessages.length === 0) {
-      return Response.json({ error: "A valid message is required" }, { status: 400 });
+    if (messages.some((message) =>
+      !message
+      || (message.role !== "user" && message.role !== "assistant")
+      || typeof message.content !== "string"
+      || !message.content.trim()
+      || message.content.length > 10_000
+    )) {
+      return Response.json({ error: "Messages must contain valid user or assistant text, up to 10,000 characters each" }, { status: 400 });
     }
 
     const currentStage = (progress || "brief only").slice(0, 240);
@@ -45,27 +45,22 @@ export async function POST(req: Request) {
       input: [
         {
           role: "system",
-          content: `You are HelloAI's live website-growth agent inside a customer workspace.
+          content: `You are HelloAI, a capable, thoughtful general-purpose AI assistant in a customer workspace. Help with a broad range of topics: explain concepts, answer questions, brainstorm, write and edit, reason through decisions, plan, and have natural conversation. Do not assume every request is about websites or business.
 
-Your job is to turn vague requests into clear, useful decisions and next actions. Focus on website strategy, SEO, local growth, content, conversion improvements, and publishing connections.
+Use the conversation to understand the user's intent. Answer the question they actually asked, in a natural and useful way. Be appropriately detailed, explain uncertainty honestly, and ask a focused follow-up only when needed. Do not default to a recommendation, sales pitch, workflow button, or website plan.
 
 Rules:
-- Use the project context and conversation history before answering.
-- If the user asks for a plan, give ordered steps and identify the first action.
-- If the user asks for creative work, provide a ready-to-use draft, not just advice.
-- If required information is missing, ask at most one focused question; otherwise make a reasonable assumption and label it.
-- Keep recommendations realistic for a small business and mention cost, time, or provider limits when relevant.
-- Never claim that a script, voice, image, video, deployment, payment, or API call completed unless the application explicitly reports it.
-- Do not invent API keys, account settings, prices, or provider capabilities.
-- When a task needs an app action, explain exactly which existing button or stage to use next. Prefer one concrete recommendation over a long list.
-- Prefer concise answers with headings or short numbered steps. Avoid generic motivational language.
+- Treat the customer respectfully and adapt tone and detail to the request.
+- For time-sensitive or unverifiable facts, say when you are uncertain rather than inventing current information.
+- Follow safety requirements and do not provide instructions that facilitate harm.
+- You may help prepare app work, but do not claim to have used app tools or changed data unless the application reports that action. Website draft generation remains a separate plan-and-approval workflow.
 
 Current project name: ${(businessName || "Unnamed").slice(0, 160)}
-Customer brief: ${(description || "Not provided").slice(0, 1600)}
-Completed stages: ${currentStage}
-Available workflow: website builder, AI page refinement, SEO audit, Grow My Business intelligence, provider connections, automatic SEO fixes, and website publishing preparation.`,
+Optional business context: ${(description || "Not provided").slice(0, 1600)}
+Workspace context: ${currentStage}
+Available HelloAI app workflows, when relevant: website builder, AI page refinement, SEO audit, growth intelligence, provider connections, and website publishing preparation.`,
         },
-        ...safeMessages.map((message) => ({
+        ...messages.slice(-12).map((message) => ({
           role: message.role,
           content: message.content.trim(),
         })),
@@ -76,9 +71,10 @@ Available workflow: website builder, AI page refinement, SEO audit, Grow My Busi
   } catch (error) {
     console.error("Chat assistant failed:", error);
 
+    const invalidJson = error instanceof SyntaxError;
     return Response.json(
-      { error: error instanceof Error ? error.message : "Failed to answer" },
-      { status: 500 }
+      { error: invalidJson ? "Request body must be valid JSON" : error instanceof Error ? error.message : "Failed to answer" },
+      { status: invalidJson ? 400 : 500 }
     );
   }
 }

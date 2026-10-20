@@ -80,6 +80,8 @@ export default function WebsiteBuilderPage() {
   const [refinementInstruction, setRefinementInstruction] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [accountUserId, setAccountUserId] = useState<string | null>(null);
+  const [isResettingProject, setIsResettingProject] = useState(false);
+  const [projectMessage, setProjectMessage] = useState("");
 
   const selectedPage = draft?.pages.find((page) => page.slug === selectedSlug) || draft?.pages[0];
   const seoTitleLength = selectedPage?.seoTitle?.length || 0;
@@ -125,11 +127,46 @@ export default function WebsiteBuilderPage() {
 
   useEffect(() => {
     const payload = { businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos };
+    if (isResettingProject) return;
     window.localStorage.setItem("helloai-website-draft", JSON.stringify(payload));
     if (supabase && accountUserId && (draft || businessName || description)) {
       void supabase.from("projects").upsert({ user_id: accountUserId, kind: "website", name: businessName || "Website project", payload, updated_at: new Date().toISOString() }, { onConflict: "user_id,kind" });
     }
-  }, [accountUserId, businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos]);
+  }, [accountUserId, businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos, isResettingProject]);
+
+  const resetWebsiteProject = async () => {
+    if (!window.confirm("Delete this website project and its saved draft? This cannot be undone.")) return;
+    setIsResettingProject(true);
+    setError("");
+    setProjectMessage("");
+    try {
+      if (supabase && accountUserId) {
+        const { error: deleteError } = await supabase.from("projects").delete().eq("user_id", accountUserId).eq("kind", "website");
+        if (deleteError) throw new Error(`Could not delete the saved website project: ${deleteError.message}`);
+      }
+      window.localStorage.removeItem("helloai-website-draft");
+      window.localStorage.removeItem("helloai-website-autofix");
+      setBusinessName("");
+      setDescription("");
+      setIndustry("");
+      setLocation("");
+      setPhone("");
+      setEmail("");
+      setWebsiteUrl("");
+      setServices("");
+      setAudience("");
+      setTone("Clear, confident, and human");
+      setPrimaryAction("Contact the business");
+      setDraft(null);
+      setSelectedSlug("home");
+      setPhotos({});
+      setProjectMessage("Website project deleted. You can start a new one whenever you’re ready.");
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Could not delete the website project.");
+    } finally {
+      setIsResettingProject(false);
+    }
+  };
 
   const buildWebsite = async (event: FormEvent) => {
     event.preventDefault();
@@ -229,7 +266,8 @@ export default function WebsiteBuilderPage() {
 
   return (
     <main className="website-builder-shell">
-      <header className="website-builder-header"><Link href="/" className="back-link">← HelloAI workspace</Link><span className="eyebrow">WEBSITE BUILDER</span></header>
+      <header className="website-builder-header"><Link href="/" className="back-link">← HelloAI workspace</Link><span className="eyebrow">WEBSITE BUILDER</span><button type="button" className="secondary-button" onClick={() => void resetWebsiteProject()} disabled={isResettingProject}>{isResettingProject ? "Deleting..." : "Delete / restart project"}</button></header>
+      {projectMessage && <div className="success-banner" role="status">{projectMessage}</div>}
       <div className="website-builder-grid website-builder-grid-wide">
         <section className="website-brief-panel">
           <span className="eyebrow">BUILD A COMPLETE SITE</span><h1>Shape every page before it goes live.</h1>

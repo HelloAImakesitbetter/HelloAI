@@ -80,6 +80,7 @@ export default function SeoPage() {
   const [isLoadingSearchConsole, setIsLoadingSearchConsole] = useState(false);
   const [backlinks, setBacklinks] = useState<BacklinkReport | null>(null);
   const [isLoadingBacklinks, setIsLoadingBacklinks] = useState(false);
+  const [isResettingProject, setIsResettingProject] = useState(false);
 
   useEffect(() => {
     const loadWorkspace = async () => {
@@ -105,9 +106,44 @@ export default function SeoPage() {
 
   useEffect(() => {
     const payload = { report, audit, intelligence, searchConsoleRows, searchConsoleSites, searchConsoleSite, backlinks };
+    if (isResettingProject) return;
     window.localStorage.setItem("helloai-seo-workspace", JSON.stringify(payload));
     if (supabase && accountUserId && (report || audit || intelligence)) void supabase.from("projects").upsert({ user_id: accountUserId, kind: "seo", name: "SEO workspace", payload, updated_at: new Date().toISOString() }, { onConflict: "user_id,kind" });
-  }, [accountUserId, report, audit, intelligence, searchConsoleRows, searchConsoleSites, searchConsoleSite, backlinks]);
+  }, [accountUserId, report, audit, intelligence, searchConsoleRows, searchConsoleSites, searchConsoleSite, backlinks, isResettingProject]);
+
+  const resetSeoProject = async () => {
+    if (!window.confirm("Delete this SEO project and its saved reports and research? This cannot be undone.")) return;
+    setIsResettingProject(true);
+    setError("");
+    setStatusMessage("");
+    try {
+      if (supabase && accountUserId) {
+        const { error: deleteError } = await supabase.from("projects").delete().eq("user_id", accountUserId).eq("kind", "seo");
+        if (deleteError) throw new Error(`Could not delete the saved SEO project: ${deleteError.message}`);
+      }
+      window.localStorage.removeItem("helloai-seo-workspace");
+      window.localStorage.removeItem("helloai-seo-connected-site");
+      setBusinessName("");
+      setDescription("");
+      setLocation("");
+      setWebsiteUrl("");
+      setConnectedSite("");
+      setReport(null);
+      setAudit(null);
+      setIntelligence(null);
+      setReviewQueue([]);
+      setCompetitorUrl("");
+      setSearchConsoleRows([]);
+      setSearchConsoleSites([]);
+      setSearchConsoleSite("");
+      setBacklinks(null);
+      setStatusMessage("SEO project deleted. You can start a new one whenever you’re ready.");
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Could not delete the SEO project.");
+    } finally {
+      setIsResettingProject(false);
+    }
+  };
 
   const generateReport = async (event: FormEvent) => {
     event.preventDefault();
@@ -345,6 +381,7 @@ export default function SeoPage() {
           <strong>Search visibility</strong>
         </div>
         <div className="seo-header-actions">
+          <button type="button" className="secondary-button" onClick={() => void resetSeoProject()} disabled={isResettingProject}>{isResettingProject ? "Deleting..." : "Delete / restart project"}</button>
           <Link className="secondary-button" href="/api/auth/google">Connect Google account</Link>
           <Link className="secondary-button" href="/website">Open website builder</Link>
         </div>

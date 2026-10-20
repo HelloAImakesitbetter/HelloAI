@@ -89,15 +89,13 @@ function parsePlan(output: string) {
     throw new Error("The planner must return exactly one website-generation task for this execution slice");
   }
 
-  const keys = new Set<string>();
   const tasks = value.tasks.map((rawTask, position): PlannedTask & { position: number } => {
     if (!rawTask || typeof rawTask !== "object" || Array.isArray(rawTask)) throw new Error("The planner returned an invalid task");
     const task = rawTask as Record<string, unknown>;
-    const key = typeof task.key === "string" ? task.key.trim() : "";
+    const key = "website-draft";
     const title = typeof task.title === "string" ? task.title.trim() : "";
     const description = typeof task.description === "string" ? task.description.trim() : "";
     const toolName = task.toolName;
-    if (!/^[a-z0-9-]{1,80}$/.test(key) || keys.has(key)) throw new Error("The planner returned duplicate or invalid task keys");
     if (!title || title.length > 200 || !description || description.length > 2000) throw new Error("The planner returned incomplete task details");
     if (typeof toolName !== "string" || !availableTools.includes(toolName as ToolName)) throw new Error("The planner selected a tool that is not enabled");
     if (!Array.isArray(task.dependsOn) || task.dependsOn.length > 7 || !task.dependsOn.every((dependency) => typeof dependency === "string")) {
@@ -133,7 +131,6 @@ function parsePlan(output: string) {
       }
     }
 
-    keys.add(key);
     return {
       key,
       title,
@@ -194,7 +191,7 @@ export async function POST(request: Request) {
     const openai = new OpenAI({ apiKey, timeout: 30_000, maxRetries: 1 });
     const response = await openai.responses.create({
       model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
-      input: `Decide whether the goal can be accomplished by generating one small-business website draft. Return JSON only. If it cannot, return {"supported":false,"reason":"A brief explanation that website draft generation does not fulfill this goal."}. If it can, return {"supported":true,"successCriteria":[1-6 strings],"tasks":[one object with key,title,description,toolName,toolInput,dependsOn]}. The only allowed toolName is website.generate. toolInput must contain description and may include businessName, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction. Use user-provided information; do not invent contact details or claim the draft already exists. Use an empty dependsOn array.\n\nUser goal:\n${goal}\n\nUser-provided success criteria:\n${JSON.stringify(requestBody.successCriteria || [])}`,
+      input: `Decide whether the goal can be accomplished by generating one small-business website draft. Return JSON only. If it cannot, return {"supported":false,"reason":"A brief explanation that website draft generation does not fulfill this goal."}. If it can, return {"supported":true,"successCriteria":[1-6 strings],"tasks":[one object with key,title,description,toolName,toolInput,dependsOn]}. Set key to exactly "website-draft". The only allowed toolName is website.generate. toolInput must contain description and may include businessName, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction. Use user-provided information; do not invent contact details or claim the draft already exists. Use an empty dependsOn array.\n\nUser goal:\n${goal}\n\nUser-provided success criteria:\n${JSON.stringify(requestBody.successCriteria || [])}`,
     });
 
     const plan = parsePlan(response.output_text);

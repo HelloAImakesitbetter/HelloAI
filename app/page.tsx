@@ -25,6 +25,16 @@ type AgentRun = {
   createdAt: string;
   tasks: AgentTask[];
 };
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+type SavedConversation = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  updated_at: string;
+};
 
 async function fetchAgentRuns(accessToken: string): Promise<AgentRun[]> {
   const response = await fetch("/api/agent/runs", { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -84,11 +94,14 @@ export default function Home() {
     }
   });
   const [task, setTask] = useState("");
+  const [conversation, setConversation] = useState<ChatMessage[]>([]);
+  const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [chatUserId, setChatUserId] = useState<string | null>(null);
+  const [isSavingConversation, setIsSavingConversation] = useState(false);
+  const [conversationNotice, setConversationNotice] = useState("");
   const [mode, setMode] = useState<"build" | "grow">("build");
   const [activeCategory, setActiveCategory] = useState<"code" | "productivity" | "content">("code");
-  const [recommendation, setRecommendation] = useState("");
-  const [recommendationHref, setRecommendationHref] = useState("/website");
-  const [recommendationLabel, setRecommendationLabel] = useState("Open website builder");
   const [isThinking, setIsThinking] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -102,6 +115,8 @@ export default function Home() {
 
   const selectedRun = agentRuns.find((run) => run.id === selectedRunId) || agentRuns[0];
   const hasActiveAgentRun = agentRuns.some((run) => run.status === "queued" || run.status === "running");
+  const userBrief = conversation.filter((message) => message.role === "user").map((message) => message.content).join("\n");
+  const canPrepareWebsitePlan = /\b(website|web site|webpage|web page|landing page|online store)\b/i.test(userBrief);
 
   useEffect(() => {
     let active = true;
@@ -109,11 +124,13 @@ export default function Home() {
       return () => { active = false; };
     }
 
-    const syncSession = async (accessToken?: string) => {
+    const syncSession = async (accessToken?: string, userId?: string) => {
       if (!active) return;
       setAgentAccessToken(accessToken || "");
+      setChatUserId(userId || null);
       setAgentError("");
       if (!accessToken) {
+        setSavedConversations([]);
         setAgentRuns([]);
         setSelectedRunId("");
         setAgentMessage("Sign in to save and view task plans.");
@@ -134,9 +151,9 @@ export default function Home() {
       }
     };
 
-    void supabase.auth.getSession().then(({ data }) => syncSession(data.session?.access_token));
+    void supabase.auth.getSession().then(({ data }) => syncSession(data.session?.access_token, data.session?.user.id));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      void syncSession(session?.access_token);
+      void syncSession(session?.access_token, session?.user.id);
     });
 
     return () => {
@@ -144,6 +161,34 @@ export default function Home() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const client = supabase;
+    if (!client || !chatUserId) return;
+    let active = true;
+    const loadSavedConversations = async () => {
+      const { data, error } = await client
+        .from("chat_conversations")
+        .select("id, title, messages, updated_at")
+        .eq("user_id", chatUserId)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+      if (!active) return;
+      if (error) {
+        setConversationNotice("Saved chats are unavailable. Apply supabase/migrations/004_chat_conversations.sql in your Supabase SQL Editor to enable them.");
+        return;
+      }
+      setSavedConversations((data || []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        messages: row.messages as ChatMessage[],
+        updated_at: row.updated_at,
+      })));
+      setConversationNotice("");
+    };
+    void loadSavedConversations();
+    return () => { active = false; };
+  }, [chatUserId]);
 
   useEffect(() => {
     if (!agentAccessToken || !hasActiveAgentRun) return;
@@ -174,27 +219,110 @@ export default function Home() {
 
   const submitTask = async () => {
     if (!task.trim() || isThinking) return;
-    const lowerTask = task.toLowerCase();
-    const isGrowthTask = lowerTask.includes("seo") || lowerTask.includes("rank") || lowerTask.includes("competitor") || lowerTask.includes("traffic") || mode === "grow";
+    const nextMessages: ChatMessage[] = [...conversation, { role: "user", content: task.trim() }];
     setIsThinking(true);
-    setRecommendation("");
+    setAgentError("");
     try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: task }], businessName, description: task, progress: `homepage ${mode} mode` }) });
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages,
+          businessName,
+          description: nextMessages.filter((message) => message.role === "user").map((message) => message.content).join("\n"),
+          progress: `home ${mode} mode; clarifying a customer request before preparing a plan`,
+        }),
+      });
       const data = await response.json();
-      setRecommendation(response.ok ? data.reply : `I recommend starting with ${isGrowthTask ? "a full SEO and competitor analysis" : "a complete website brief"}.`);
-    } catch {
-      setRecommendation(`I recommend starting with ${isGrowthTask ? "a full SEO and competitor analysis" : "a complete website brief"}.`);
+      if (!response.ok) throw new Error(data.error || "HelloAI couldn't reply");
+      if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("HelloAI returned an empty reply. Please try again.");
+      setConversation([...nextMessages, { role: "assistant", content: data.reply.trim() }]);
+      setTask("");
+    } catch (requestError) {
+      setAgentError(requestError instanceof Error ? requestError.message : "HelloAI couldn't reply");
     } finally {
-      setRecommendationHref(isGrowthTask ? "/seo" : "/website");
-      setRecommendationLabel(isGrowthTask ? "Open SEO growth workspace" : "Open website builder");
       setIsThinking(false);
     }
   };
 
+  const startNewConversation = () => {
+    if (conversation.length > 0 && !window.confirm("Start a new chat? This clears the current chat but does not delete any saved copy.")) return;
+    setConversation([]);
+    setActiveConversationId(null);
+    setTask("");
+    setAgentError("");
+    setConversationNotice("");
+  };
+
+  const openSavedConversation = (saved: SavedConversation) => {
+    setConversation(saved.messages);
+    setActiveConversationId(saved.id);
+    setTask("");
+    setAgentError("");
+    setConversationNotice(`Opened saved chat “${saved.title}”. New messages are not saved until you choose Save.`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const saveConversation = async () => {
+    if (!supabase || !chatUserId || isSavingConversation || conversation.length === 0) return;
+    if (conversation.length > 100) {
+      setAgentError("This chat is too long to save. Start a new chat or save a shorter conversation.");
+      return;
+    }
+    setIsSavingConversation(true);
+    setAgentError("");
+    try {
+      const firstMessage = conversation.find((message) => message.role === "user")?.content || "HelloAI conversation";
+      const title = firstMessage.trim().replace(/\s+/g, " ").slice(0, 117) + (firstMessage.trim().length > 117 ? "..." : "");
+      const savedAt = new Date().toISOString();
+      const result = activeConversationId
+        ? await supabase.from("chat_conversations").update({ title, messages: conversation, updated_at: savedAt }).eq("id", activeConversationId).eq("user_id", chatUserId).select("id, title, messages, updated_at").single()
+        : await supabase.from("chat_conversations").insert({ user_id: chatUserId, title, messages: conversation }).select("id, title, messages, updated_at").single();
+      if (result.error || !result.data) {
+        throw new Error(result.error?.message || "The conversation was not returned after saving.");
+      }
+      const saved: SavedConversation = {
+        id: result.data.id,
+        title: result.data.title,
+        messages: result.data.messages as ChatMessage[],
+        updated_at: result.data.updated_at,
+      };
+      setActiveConversationId(saved.id);
+      setSavedConversations((current) => [saved, ...current.filter((item) => item.id !== saved.id)].slice(0, 20));
+      setConversationNotice("Chat saved to your account. Future messages still require you to save again.");
+    } catch (saveError) {
+      setAgentError(saveError instanceof Error ? saveError.message : "Could not save this conversation.");
+    } finally {
+      setIsSavingConversation(false);
+    }
+  };
+
+  const deleteSavedConversation = async (id: string) => {
+    if (!supabase || !chatUserId) return;
+    const saved = savedConversations.find((item) => item.id === id);
+    if (!saved || !window.confirm(`Delete the saved chat “${saved.title}”? This cannot be undone.`)) return;
+    setAgentError("");
+    const { error } = await supabase.from("chat_conversations").delete().eq("id", id).eq("user_id", chatUserId);
+    if (error) {
+      setAgentError(`Could not delete the saved chat: ${error.message}`);
+      return;
+    }
+    setSavedConversations((current) => current.filter((item) => item.id !== id));
+    if (activeConversationId === id) {
+      setActiveConversationId(null);
+      setConversation([]);
+      setConversationNotice("Saved chat deleted.");
+    }
+  };
+
   const createPlan = async () => {
-    if (!task.trim() || isPlanning) return;
+    if (!canPrepareWebsitePlan || isPlanning) return;
     if (!supabase) {
       setAgentError("Supabase is not configured. Add its URL and public key to .env.local, then restart the app.");
+      return;
+    }
+    if (userBrief.length > 4000) {
+      setAgentError("This website brief is longer than the 4,000-character planning limit. Shorten it and try again.");
       return;
     }
 
@@ -209,7 +337,7 @@ export default function Home() {
       const response = await fetch("/api/agent/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ goal: task }),
+        body: JSON.stringify({ goal: userBrief }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not create task plan");
@@ -270,13 +398,46 @@ export default function Home() {
       <section className="task-workspace-main">
         <header className="task-topbar"><span className="task-mobile-brand">HelloAI</span><span className="task-topbar-spacer" /><button type="button">◌</button><button type="button">?</button><span className="task-credit">Free plan</span></header>
         <div className="task-mode-switch"><button className={mode === "build" ? "active" : ""} type="button" onClick={() => setMode("build")}>Build</button><button className={mode === "grow" ? "active" : ""} type="button" onClick={() => setMode("grow")}>Grow</button></div>
-        <section className="task-hero"><span className="eyebrow">{mode === "build" ? "BUILD MODE" : "GROWTH MODE"}</span><h1>What needs to be done?</h1><p className="task-hero-intro">Tell HelloAI what you are trying to achieve. It will recommend the best next step before taking you there.</p><div className="task-composer"><textarea value={task} onChange={(event) => setTask(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitTask(); } }} placeholder={mode === "build" ? "Tell me what you want to make or improve..." : "Tell me how you want to grow your business..."} />{(isThinking || recommendation) && <div className="task-inline-response"><span className="eyebrow">{isThinking ? "HELLOAI IS THINKING" : "HELLOAI RECOMMENDS"}</span><p>{isThinking ? "Working out the best next step..." : recommendation}</p>{recommendation && <Link className="primary-button" href={recommendationHref}>{recommendationLabel} →</Link>}</div>}{agentMessage && <p className="task-agent-message" role="status">{agentMessage}</p>}{agentError && <div className="task-agent-error" role="alert">{agentError}</div>}<div className="task-composer-footer"><button type="button">＋</button><span>{mode === "grow" ? "Growth agent" : "HelloAI agent"}⌄</span><span className="task-composer-spacer" /><button className="task-plan-button" type="button" onClick={() => void createPlan()} disabled={!task.trim() || isPlanning || !agentAccessToken}>{isPlanning ? "Planning..." : "Plan task"}</button><button className="task-submit" type="button" onClick={() => void submitTask()} disabled={!task.trim() || isThinking}>{isThinking ? "…" : "→"}</button></div></div></section>
+        <section className="task-hero">
+          <span className="eyebrow">YOUR HELLOAI ASSISTANT</span>
+          <h1>How can I help?</h1>
+          <p className="task-hero-intro">Ask about anything, think something through, or work on a project together. Your chats stay private to this session unless you choose to save one.</p>
+          <div className="task-chat-actions">
+            {conversation.length > 0 && <button className="task-reset-conversation" type="button" onClick={startNewConversation}>New chat</button>}
+            {conversation.length > 0 && (chatUserId
+              ? <button className="task-save-conversation" type="button" onClick={() => void saveConversation()} disabled={isSavingConversation}>{isSavingConversation ? "Saving..." : activeConversationId ? "Save changes" : "Save conversation"}</button>
+              : <Link className="task-auth-link" href="/login">Sign in to save this chat</Link>)}
+          </div>
+          <div className="task-composer">
+            {conversation.length > 0
+              ? <div className="task-conversation" aria-live="polite">{conversation.map((message, index) => <article className={`task-chat-message ${message.role}`} key={`${message.role}-${index}`}><span>{message.role === "assistant" ? "HelloAI" : "You"}</span><p>{message.content}</p></article>)}</div>
+              : <div className="task-chat-welcome"><span className="task-chat-avatar">H</span><div><strong>Hello, I’m HelloAI.</strong><p>Ask me a question, share an idea, or tell me what you’re working on.</p></div></div>}
+            {isThinking && <p className="task-chat-thinking" role="status">HelloAI is thinking…</p>}
+            <textarea aria-label="Message HelloAI" value={task} onChange={(event) => setTask(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitTask(); } }} placeholder="Message HelloAI about anything..." />
+            {agentMessage && <p className="task-agent-message" role="status">{agentMessage}</p>}
+            {agentError && <div className="task-agent-error" role="alert">{agentError}</div>}
+            {conversationNotice && <p className="task-chat-notice" role="status">{conversationNotice}</p>}
+            <div className="task-composer-footer">
+              <span>Chats are not saved unless you choose to save them.</span>
+              <span className="task-composer-spacer" />
+              {canPrepareWebsitePlan && <button className="task-plan-button" type="button" onClick={() => void createPlan()} disabled={isPlanning || !agentAccessToken}>{isPlanning ? "Preparing..." : "Prepare website plan"}</button>}
+              <button className="task-submit" type="button" aria-label="Send message to HelloAI" onClick={() => void submitTask()} disabled={!task.trim() || isThinking}>{isThinking ? "…" : "→"}</button>
+            </div>
+          </div>
+          <details className="task-saved-conversations">
+            <summary>Saved chats ({savedConversations.length})</summary>
+            {conversationNotice.startsWith("Saved chats are unavailable") && <p className="task-chat-notice" role="status">{conversationNotice}</p>}
+            {savedConversations.length > 0
+              ? <div className="task-saved-chat-list">{savedConversations.map((saved) => <div className="task-saved-chat" key={saved.id}><button type="button" onClick={() => openSavedConversation(saved)}><strong>{saved.title}</strong><small>Saved {new Date(saved.updated_at).toLocaleDateString()}</small></button><button className="task-delete-chat" type="button" aria-label={`Delete saved chat ${saved.title}`} onClick={() => void deleteSavedConversation(saved.id)}>Delete</button></div>)}</div>
+              : <p className="task-chat-notice">Saved conversations will appear here. Nothing is stored until you select “Save conversation”.</p>}
+          </details>
+        </section>
 
         <section className="task-agent-history" aria-labelledby="agent-history-heading">
           <div className="task-agent-history-heading"><div><span className="eyebrow">AGENT RUNS</span><h2 id="agent-history-heading">Saved plans</h2></div><span>{agentRuns.length} / 20</span></div>
           {agentRuns.length === 0 ? <p className="task-agent-empty">{agentError || agentMessage || "Sign in to create and keep task plans."} {!agentAccessToken && supabase && <Link href="/login">Sign in →</Link>}</p> : <div className="task-agent-history-layout">
             <div className="task-agent-run-list">{agentRuns.map((run) => <button className={run.id === selectedRun?.id ? "task-agent-run selected" : "task-agent-run"} key={run.id} type="button" onClick={() => setSelectedRunId(run.id)}><span>{run.goal}</span><small><b>{run.status}</b> · {new Date(run.createdAt).toLocaleDateString()}</small></button>)}</div>
-            {selectedRun && <article className="task-agent-run-detail"><div className="task-agent-run-title"><h3>{selectedRun.goal}</h3><span className="task-agent-status">{selectedRun.status}</span></div><p className="task-agent-notice">{selectedRun.status === "planned" ? "This plan has not started. Starting runs one website-generation task." : selectedRun.status === "queued" || selectedRun.status === "running" ? "The background worker is processing this task." : selectedRun.status === "completed" ? "Verified website draft saved in this run." : selectedRun.status === "failed" ? "The task failed; see the error below." : selectedRun.status === "cancelled" ? "This run was cancelled." : `Run status: ${selectedRun.status}.`}</p>{selectedRun.status === "planned" && <button className="primary-button" type="button" disabled={actingRunId === selectedRun.id} onClick={() => void updateRun(selectedRun, "start")}>{actingRunId === selectedRun.id ? "Starting..." : "Start task"}</button>}{(selectedRun.status === "queued" || selectedRun.status === "running") && <button className="secondary-button" type="button" disabled={actingRunId === selectedRun.id || selectedRun.cancelRequested} onClick={() => void updateRun(selectedRun, "cancel")}>{selectedRun.cancelRequested ? "Cancellation requested" : actingRunId === selectedRun.id ? "Cancelling..." : "Cancel run"}</button>}<strong>Success criteria</strong><ul>{selectedRun.successCriteria.map((criterion) => <li key={criterion}>{criterion}</li>)}</ul><strong>Planned steps</strong><ol>{selectedRun.tasks.map((agentTask) => <li key={agentTask.key}><span>{agentTask.title}</span><small>{agentTask.toolName} · {agentTask.status}{agentTask.requiresApproval ? " · approval required" : ""}</small>{agentTask.errorMessage && <small className="task-agent-run-error">{agentTask.errorMessage}</small>}{agentTask.evidence && <small>Verified {agentTask.evidence.pageCount} pages; home page {agentTask.evidence.hasHomePage ? "present" : "missing"}.</small>}{agentTask.result?.pages && <ul className="task-agent-page-results">{agentTask.result.pages.map((page) => <li key={page.slug}>{page.label}: {page.title}</li>)}</ul>}</li>)}</ol></article>}
+            {selectedRun && <article className="task-agent-run-detail"><div className="task-agent-run-title"><h3>{selectedRun.goal}</h3><span className="task-agent-status">{selectedRun.status}</span></div><p className="task-agent-notice">{selectedRun.status === "planned" ? "Nothing has been generated yet. Approving starts website draft generation; it will not publish the site." : selectedRun.status === "queued" || selectedRun.status === "running" ? "The background worker is processing this task." : selectedRun.status === "completed" ? "Verified website draft saved in this run." : selectedRun.status === "failed" ? "The task failed; see the error below." : selectedRun.status === "cancelled" ? "This run was cancelled." : `Run status: ${selectedRun.status}.`}</p>{selectedRun.status === "planned" && <button className="primary-button" type="button" disabled={actingRunId === selectedRun.id} onClick={() => void updateRun(selectedRun, "start")}>{actingRunId === selectedRun.id ? "Starting..." : "Approve & generate draft"}</button>}{(selectedRun.status === "queued" || selectedRun.status === "running") && <button className="secondary-button" type="button" disabled={actingRunId === selectedRun.id || selectedRun.cancelRequested} onClick={() => void updateRun(selectedRun, "cancel")}>{selectedRun.cancelRequested ? "Cancellation requested" : actingRunId === selectedRun.id ? "Cancelling..." : "Cancel run"}</button>}<strong>Success criteria</strong><ul>{selectedRun.successCriteria.map((criterion) => <li key={criterion}>{criterion}</li>)}</ul><strong>Planned steps</strong><ol>{selectedRun.tasks.map((agentTask) => <li key={agentTask.key}><span>{agentTask.title}</span><small>{agentTask.toolName} · {agentTask.status}{agentTask.requiresApproval ? " · approval required" : ""}</small>{agentTask.errorMessage && <small className="task-agent-run-error">{agentTask.errorMessage}</small>}{agentTask.evidence && <small>Verified {agentTask.evidence.pageCount} pages; home page {agentTask.evidence.hasHomePage ? "present" : "missing"}.</small>}{agentTask.result?.pages && <ul className="task-agent-page-results">{agentTask.result.pages.map((page) => <li key={page.slug}>{page.label}: {page.title}</li>)}</ul>}</li>)}</ol></article>}
           </div>}
         </section>
 

@@ -70,6 +70,7 @@ export async function generateWebsiteDraft(input: WebsiteGenerationInput): Promi
   const openai = new OpenAI({ apiKey, timeout: 90_000, maxRetries: 1 });
   const response = await openai.responses.create({
     model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
+    text: { format: { type: "json_object" } },
     input: `Create a complete multi-page small-business website and growth pack for ${input.businessName || "this business"}.
 
 Business brief:
