@@ -22,6 +22,7 @@ type WebsitePage = {
   steps: string[];
   closing: string;
   imagePrompt?: string;
+  sections?: { heading: string; body: string; items: string[]; layout: "cards" | "split" | "faq" | "steps" }[];
   seoTitle: string;
   seoDescription: string;
 };
@@ -29,6 +30,13 @@ type WebsiteDraft = { pages: WebsitePage[]; growthPack?: { blogs: { title: strin
 type Photo = { name: string; url: string; fallbackUrl?: string; x: number; y: number };
 type Provider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 type ProviderConnection = { id: string; provider: Provider; label: string };
+const MAX_SAVED_IMAGE_DATA_URL_CHARS = 1_800_000;
+const WEBSITE_STORAGE_FULL_EVENT = "helloai-website-storage-full";
+const WEBSITE_STORAGE_SAVED_EVENT = "helloai-website-storage-saved";
+
+function getSavedImageDataSize(photos: Record<string, Photo[]>) {
+  return Object.values(photos).flat().reduce((total, photo) => total + (photo.url.startsWith("data:image/") ? photo.url.length : 0), 0);
+}
 
 function hydrateWebsiteDraft(draft?: WebsiteDraft | null): WebsiteDraft | null {
   if (!draft) return null;
@@ -47,14 +55,48 @@ function getPhotoQuery(page: WebsitePage, businessDescription: string) {
   return source.replace(/[^a-zA-Z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 8).join(",");
 }
 
-function getFallbackPhoto(pageIndex: number) {
-  const fallbackPhotos = [
-    "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=80",
-    "https://images.unsplash.com/photo-1556742049-0cf?auto=format&fit=crop&w=1200&q=80",
+function getFallbackPhoto(pageIndex: number, businessDescription: string, pageLabel: string) {
+  const context = `${businessDescription} ${pageLabel}`.toLowerCase();
+  const photoIds: [string[], string][] = [
+    [["restaurant", "catering", "food", "chef", "bakery"], "photo-1555396273-367ea4eb4db5"],
+    [["salon", "hair", "beauty", "spa"], "photo-1560066984-138dadb4c035"],
+    [["clean", "cleaning"], "photo-1581578731548-c64695cc6952"],
+    [["gym", "fitness", "training"], "photo-1534438327276-14e5300c3a48"],
+    [["builder", "construction", "renovation"], "photo-1504307651254-35680f356dfd"],
+    [["health", "clinic", "medical", "dental"], "photo-1538108149393-fbbd81895907"],
+    [["property", "real estate", "estate agent"], "photo-1560518883-ce09059eeffa"],
+    [["coffee", "cafe", "café"], "photo-1442512595331-e89e73853f31"],
   ];
-  return fallbackPhotos[pageIndex % fallbackPhotos.length].replace("?auto", "?auto");
+  const match = photoIds.find(([keywords]) => keywords.some((keyword) => context.includes(keyword)));
+  const fallbackPhotos = [
+    "photo-1497366754035-f200968a6e72",
+    "photo-1524758631624-e2822e304c36",
+    "photo-1556761175-b413da4baf72",
+    "photo-1556742049-0cfed4f6a45d",
+  ];
+  const photoId = match?.[1] || fallbackPhotos[pageIndex % fallbackPhotos.length];
+  return `https://images.unsplash.com/${photoId}?auto=format&fit=crop&crop=entropy&w=1800&h=1200&q=85`;
+}
+
+function compressWebsiteImage(dataUrl: string) {
+  return new Promise<string>((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => {
+      const scale = Math.min(1, 1200 / image.naturalWidth, 800 / image.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.naturalWidth * scale);
+      canvas.height = Math.round(image.naturalHeight * scale);
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("Could not prepare the generated image"));
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.78));
+    };
+    image.onerror = () => reject(new Error("Could not load the generated image"));
+    image.src = dataUrl;
+  });
 }
 
 export default function WebsiteBuilderPage() {
@@ -74,6 +116,7 @@ export default function WebsiteBuilderPage() {
   const [photos, setPhotos] = useState<Record<string, Photo[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
+  const [isGeneratingHeroImage, setIsGeneratingHeroImage] = useState(false);
   const [error, setError] = useState("");
   const [autoFixNotice] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -145,9 +188,25 @@ export default function WebsiteBuilderPage() {
   }, []);
 
   useEffect(() => {
+    const handleStorageFull = () => setError("Your browser could not save this draft because its image storage is full. Remove some uploaded or AI-generated images and try again.");
+    const handleStorageSaved = () => setError((current) => current.startsWith("Your browser could not save this draft") ? "" : current);
+    window.addEventListener(WEBSITE_STORAGE_FULL_EVENT, handleStorageFull);
+    window.addEventListener(WEBSITE_STORAGE_SAVED_EVENT, handleStorageSaved);
+    return () => {
+      window.removeEventListener(WEBSITE_STORAGE_FULL_EVENT, handleStorageFull);
+      window.removeEventListener(WEBSITE_STORAGE_SAVED_EVENT, handleStorageSaved);
+    };
+  }, []);
+
+  useEffect(() => {
     const payload = { businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction, draft, photos };
     if (isResettingProject) return;
-    window.localStorage.setItem("helloai-website-draft", JSON.stringify(payload));
+    try {
+      window.localStorage.setItem("helloai-website-draft", JSON.stringify(payload));
+      window.dispatchEvent(new Event(WEBSITE_STORAGE_SAVED_EVENT));
+    } catch {
+      window.dispatchEvent(new Event(WEBSITE_STORAGE_FULL_EVENT));
+    }
     if (supabase && accountUserId && (draft || businessName || description)) {
       void supabase.from("projects").upsert({ user_id: accountUserId, kind: "website", name: businessName || "Website project", payload, updated_at: new Date().toISOString() }, { onConflict: "user_id,kind" });
     }
@@ -258,12 +317,13 @@ export default function WebsiteBuilderPage() {
           ? { ...page, ...data.page, request: page.request, showInNavigation: page.showInNavigation ?? true }
           : page),
       } : current);
+      const selectedPageIndex = draft.pages.findIndex((page) => page.slug === selectedPage.slug);
+      const stockPhoto = getFallbackPhoto(selectedPageIndex, `${industry} ${description}`, selectedPage.label);
       const photo: Photo = {
-        name: `${selectedPage.label} editorial image`,
-        url: `https://loremflickr.com/1200/800/${encodeURIComponent(getPhotoQuery(data.page, description))}?lock=${draft.pages.findIndex((page) => page.slug === selectedPage.slug) + 1}`,
-        fallbackUrl: getFallbackPhoto(draft.pages.findIndex((page) => page.slug === selectedPage.slug)),
-        x: 5,
-        y: 12,
+        name: `${selectedPage.label} hero photo`,
+        url: stockPhoto,
+        x: 0,
+        y: 0,
       };
       setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug]?.length ? current[selectedPage.slug] : [photo] }));
     } catch (requestError) {
@@ -360,7 +420,7 @@ export default function WebsiteBuilderPage() {
       const response = await fetch("/api/website/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseUrl: providerFields.baseUrl, username: providerFields.username, token: providerFields.token, businessName, page: selectedPage }),
+        body: JSON.stringify({ baseUrl: providerFields.baseUrl, username: providerFields.username, token: providerFields.token, businessName, heroImage: heroPhoto?.url, page: selectedPage }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to create WordPress draft");
@@ -394,16 +454,99 @@ export default function WebsiteBuilderPage() {
     setDraft({ ...draft, pages: draft.pages.map((page) => page.slug === selectedPage.slug ? { ...page, [field]: value } : page) });
   };
 
+  const generateHeroImage = async () => {
+    if (!selectedPage || selectedPage.isGenerated === false || isGeneratingHeroImage) return;
+    if (!supabase) {
+      setError("Supabase is not configured, so sign-in is unavailable.");
+      return;
+    }
+    setIsGeneratingHeroImage(true);
+    setError("");
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (sessionError || !accessToken) throw new Error("Sign in before generating an AI hero image.");
+      const response = await fetch("/api/website/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          businessName,
+          industry: industry || description.slice(0, 120),
+          pageLabel: selectedPage.label,
+          imagePrompt: selectedPage.imagePrompt || `${selectedPage.title}. ${selectedPage.tagline}. ${getPhotoQuery(selectedPage, description)}`,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to generate hero image");
+      const compressedImage = await compressWebsiteImage(data.imageDataUrl);
+      const pagePhotos = photos[selectedPage.slug] || [];
+      const replacedHeroes = pagePhotos.filter((photo) => photo.name.endsWith(" hero image") || photo.name.endsWith(" hero photo"));
+      const retainedImageDataSize = getSavedImageDataSize(photos) - replacedHeroes.reduce((total, photo) => total + (photo.url.startsWith("data:image/") ? photo.url.length : 0), 0);
+      if (retainedImageDataSize + compressedImage.length > MAX_SAVED_IMAGE_DATA_URL_CHARS) {
+        throw new Error("The saved image limit is reached. Remove some uploaded or AI-generated images before creating another.");
+      }
+      const newHero: Photo = { name: `${selectedPage.label} AI hero image`, url: compressedImage, x: 0, y: 0 };
+      setPhotos((current) => {
+        const pagePhotos = current[selectedPage.slug] || [];
+        return { ...current, [selectedPage.slug]: [newHero, ...pagePhotos.filter((photo) => !photo.name.endsWith(" hero image") && !photo.name.endsWith(" hero photo"))] };
+      });
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Failed to generate hero image");
+    } finally {
+      setIsGeneratingHeroImage(false);
+    }
+  };
+
   const addPhotos = (event: ChangeEvent<HTMLInputElement>) => {
     if (!selectedPage || !event.target.files) return;
     const files = Array.from(event.target.files);
-    files.forEach((file) => {
+    void Promise.all(files.map((file) => new Promise<Photo>((resolve, reject) => {
+      if (file.size > 20 * 1024 * 1024) {
+        reject(new Error(`${file.name} is larger than the 20 MB upload limit`));
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        reject(new Error(`${file.name} is not an image`));
+        return;
+      }
       const reader = new FileReader();
-      reader.onload = () => setPhotos((current) => ({ ...current, [selectedPage.slug]: [...(current[selectedPage.slug] || []), { name: file.name, url: String(reader.result), x: 5 + ((current[selectedPage.slug] || []).length % 3) * 30, y: 12 + Math.floor((current[selectedPage.slug] || []).length / 3) * 28 }] }));
+      reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+      reader.onload = async () => {
+        try {
+          resolve({ name: file.name, url: await compressWebsiteImage(String(reader.result)), x: 5, y: 12 });
+        } catch (imageError) {
+          reject(imageError);
+        }
+      };
       reader.readAsDataURL(file);
-    });
+    }))).then((newPhotos) => {
+      if (getSavedImageDataSize(photos) + newPhotos.reduce((total, photo) => total + photo.url.length, 0) > MAX_SAVED_IMAGE_DATA_URL_CHARS) {
+        throw new Error("The saved image limit is reached. Remove some uploaded or AI-generated images before adding more.");
+      }
+      setError("");
+      setPhotos((current) => {
+        const existing = current[selectedPage.slug] || [];
+        return {
+          ...current,
+          [selectedPage.slug]: [...existing, ...newPhotos.map((photo, index) => ({
+            ...photo,
+            x: 5 + ((existing.length + index) % 3) * 30,
+            y: 12 + Math.floor((existing.length + index) / 3) * 28,
+          }))],
+        };
+      });
+    }).catch((imageError) => setError(imageError instanceof Error ? imageError.message : "Could not add page photos"));
     event.target.value = "";
   };
+
+  const heroPhoto = selectedPage
+    ? photos[selectedPage.slug]?.[0] || {
+      name: `${selectedPage.label} hero photo`,
+      url: getFallbackPhoto(draft?.pages.findIndex((page) => page.slug === selectedPage.slug) || 0, `${industry} ${description}`, selectedPage.label),
+      x: 0,
+      y: 0,
+    }
+    : null;
 
   return (
     <main className="website-builder-shell">
@@ -450,16 +593,25 @@ export default function WebsiteBuilderPage() {
             <div className="page-visibility-notice">Hidden from navigation means it won’t appear in this site menu. It is not private: after publishing, anyone with its direct URL may be able to visit it.</div>
           </div> : <div className="website-preview">
             <div className="preview-nav"><strong>{businessName || selectedPage.title}</strong><span>{draft?.pages.filter((page) => page.isGenerated !== false && page.showInNavigation !== false).map((page) => <button key={page.slug} className={page.slug === selectedPage.slug ? "preview-nav-active" : ""} type="button" onClick={() => setSelectedSlug(page.slug)}>{page.label}</button>)}</span></div>
-            <div className="preview-hero"><span className="preview-badge">{selectedPage.label.toUpperCase()}</span><h2>{selectedPage.title}</h2><p>{selectedPage.tagline}</p><div className="preview-actions"><button>{selectedPage.primaryCta}</button><button className="outline-button">{selectedPage.secondaryCta}</button></div></div>
+            <div className="preview-hero-layout">
+              <div className="preview-hero"><span className="preview-badge">{selectedPage.label.toUpperCase()}</span><h2>{selectedPage.title}</h2><p>{selectedPage.tagline}</p><div className="preview-actions"><button>{selectedPage.primaryCta}</button><button className="outline-button">{selectedPage.secondaryCta}</button></div></div>
+              {heroPhoto && <div className="preview-hero-image"><Image src={heroPhoto.url} alt={`${selectedPage.label} — ${businessName || selectedPage.title}`} width={1200} height={800} priority unoptimized /></div>}
+            </div>
             <div className="preview-intro"><p>{selectedPage.intro}</p></div>
-            {(photos[selectedPage.slug] || []).length > 0 && <div className="preview-photo-canvas" onPointerMove={(event) => { if (!draggingPhoto || draggingPhoto.pageSlug !== selectedPage.slug) return; const bounds = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(78, ((event.clientX - bounds.left) / bounds.width) * 100 - 10)); const y = Math.max(0, Math.min(78, ((event.clientY - bounds.top) / bounds.height) * 100 - 10)); setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug].map((photo) => photo.name === draggingPhoto.name ? { ...photo, x, y } : photo) })); }} onPointerUp={() => setDraggingPhoto(null)} onPointerLeave={() => setDraggingPhoto(null)}><span className="canvas-label">DRAG PHOTOS INTO PLACE</span>{photos[selectedPage.slug].map((photo) => <Image key={photo.name + photo.url} src={photo.url} alt={photo.name} draggable={false} width={480} height={320} unoptimized style={{ left: `${photo.x ?? 5}%`, top: `${photo.y ?? 12}%` }} onError={(event) => { const fallbackUrl = (photo as Photo & { fallbackUrl?: string }).fallbackUrl; if (fallbackUrl && event.currentTarget.src !== fallbackUrl) event.currentTarget.src = fallbackUrl; }} onPointerDown={(event) => { event.preventDefault(); setDraggingPhoto({ pageSlug: selectedPage.slug, name: photo.name }); }} />)}</div>}
-            <div className="preview-benefits">{selectedPage.benefits.map((benefit, index) => <article key={benefit + index}><span>0{index + 1}</span><h3>{benefit}</h3><p>Designed around what matters to your customers.</p></article>)}</div>
-            <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div><div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
+            {(photos[selectedPage.slug] || []).length > 1 && <div className="preview-photo-canvas" onPointerMove={(event) => { if (!draggingPhoto || draggingPhoto.pageSlug !== selectedPage.slug) return; const bounds = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(78, ((event.clientX - bounds.left) / bounds.width) * 100 - 10)); const y = Math.max(0, Math.min(78, ((event.clientY - bounds.top) / bounds.height) * 100 - 10)); setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug].map((photo) => photo.name === draggingPhoto.name ? { ...photo, x, y } : photo) })); }} onPointerUp={() => setDraggingPhoto(null)} onPointerLeave={() => setDraggingPhoto(null)}><span className="canvas-label">DRAG PHOTOS INTO PLACE</span>{photos[selectedPage.slug].slice(1).map((photo) => <Image key={photo.name + photo.url} src={photo.url} alt={photo.name} draggable={false} width={480} height={320} unoptimized style={{ left: `${photo.x ?? 5}%`, top: `${photo.y ?? 12}%` }} onError={(event) => { const fallbackUrl = (photo as Photo & { fallbackUrl?: string }).fallbackUrl; if (fallbackUrl && event.currentTarget.src !== fallbackUrl) event.currentTarget.src = fallbackUrl; }} onPointerDown={(event) => { event.preventDefault(); setDraggingPhoto({ pageSlug: selectedPage.slug, name: photo.name }); }} />)}</div>}
+            {selectedPage.sections?.length ? selectedPage.sections.map((section, sectionIndex) => <section className={`preview-content-section preview-section-${section.layout}`} key={`${section.heading}-${sectionIndex}`}>
+              <span className="eyebrow">0{sectionIndex + 1} / {section.layout.toUpperCase()}</span><h3>{section.heading}</h3>{section.body && <p>{section.body}</p>}
+              {section.items.length > 0 && <div className="preview-section-items">{section.items.map((item, itemIndex) => <article key={`${item}-${itemIndex}`}><span>{section.layout === "faq" ? "Q&A" : `0${itemIndex + 1}`}</span><p>{item}</p></article>)}</div>}
+            </section>) : <>
+              <div className="preview-benefits"><span className="eyebrow">WHY CHOOSE US</span><div>{selectedPage.benefits.map((benefit, index) => <article key={benefit + index}><span>0{index + 1}</span><h3>{benefit}</h3></article>)}</div></div>
+              <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div>
+            </>}
+            <div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
           </div>) : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
           {selectedPage && selectedPage.isGenerated !== false && provider === "wordpress" && <div className="website-publish-action">
             <span className="eyebrow">WORDPRESS</span>
             <strong>Create a reviewable draft</strong>
-            <p>This sends the selected page copy to WordPress as a private draft. It will not publish the page publicly.</p>
+            <p>This sends the selected page, its section layouts and hero image to WordPress as a private draft. It will not publish the page publicly.</p>
             <label>WordPress username<input autoComplete="username" value={providerFields.username || ""} onChange={(event) => setProviderField("username", event.target.value)} placeholder="Your WordPress username" /></label>
             <button className="primary-button" type="button" onClick={createWordPressDraft} disabled={isPublishing || !providerFields.baseUrl?.trim() || !providerFields.username?.trim() || !providerFields.token?.trim()}>
               {isPublishing ? "Creating draft..." : "Create WordPress draft →"}
@@ -482,7 +634,28 @@ export default function WebsiteBuilderPage() {
             <label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label>
             <label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label>
             <div className="seo-panel"><div className="seo-panel-heading"><span className="eyebrow">SEO READINESS</span><strong>{seoChecks}/4</strong></div><label>SEO title <small>{seoTitleLength}/60 characters</small><input value={selectedPage.seoTitle || ""} onChange={(event) => updateSelectedPage("seoTitle", event.target.value)} /></label><label>SEO description <small>{seoDescriptionLength}/160 characters</small><textarea value={selectedPage.seoDescription || ""} onChange={(event) => updateSelectedPage("seoDescription", event.target.value)} /></label><p>Use a clear service, location, and customer outcome. These fields become your search preview.</p></div>
-            <div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><Image src={photo.url} alt={photo.name} width={160} height={120} unoptimized /><span>{photo.name}</span></div>)}</div>
+            <div className="photo-upload">
+              <span className="eyebrow">PAGE IMAGERY</span>
+              <p>A large, industry-matched hero photo is included by default. Add your own photos or create a custom AI image.</p>
+              <button type="button" className="secondary-button" onClick={() => void generateHeroImage()} disabled={isGeneratingHeroImage || !accountUserId}>
+                {isGeneratingHeroImage ? "Generating image..." : accountUserId ? "Generate custom AI hero image" : "Sign in to generate an AI image"}
+              </button>
+              {!accountUserId && <Link href="/login">Sign in or create an account →</Link>}
+              <small>AI image generation uses a paid image service and can take up to a minute. Default stock imagery is free.</small>
+              <label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>
+              {(photos[selectedPage.slug] || []).map((photo, photoIndex) => <div className="uploaded-photo" key={photo.name + photo.url}>
+                <Image src={photo.url} alt={photo.name} width={160} height={120} unoptimized />
+                <span>{photo.name}</span>
+                {photoIndex !== 0 && <button type="button" className="secondary-button" onClick={() => setPhotos((current) => {
+                  const pagePhotos = current[selectedPage.slug] || [];
+                  return { ...current, [selectedPage.slug]: [photo, ...pagePhotos.filter((item) => item !== photo)] };
+                })}>Use as hero</button>}
+                <button type="button" className="secondary-button" onClick={() => setPhotos((current) => ({
+                  ...current,
+                  [selectedPage.slug]: (current[selectedPage.slug] || []).filter((item) => item !== photo),
+                }))}>Remove</button>
+              </div>)}
+            </div>
           </>}
         </aside>}
       </div>

@@ -16,6 +16,7 @@ export type WebsitePage = {
   steps: string[];
   closing: string;
   imagePrompt: string;
+  sections?: { heading: string; body: string; items: string[]; layout: "cards" | "split" | "faq" | "steps" }[];
   h2s?: string[];
   internalLinks?: string[];
   schemaType?: string;
@@ -156,7 +157,7 @@ Page type: ${input.page.pageType || "standard"}
 Page-specific brief: ${input.instruction?.trim() || input.page.request || "Write the most useful version of this page for the customer."}
 Other pages already in the plan: ${JSON.stringify(input.existingPages.filter((page) => page.slug !== input.page.slug).map(({ label, slug, title, intro, isGenerated }) => ({ label, slug, title: isGenerated ? title : "", summary: isGenerated ? intro.slice(0, 300) : "" })))}
 
-Return valid JSON only with slug, label, title, tagline, intro, primaryCta, secondaryCta, benefits (3 to 5 strings), steps (3 to 5 strings), closing, imagePrompt, seoTitle, and seoDescription. Keep the requested slug and label unchanged. Use specific credible copy, no invented credentials or guarantees, no HTML or markdown. Keep seoTitle under 60 characters and seoDescription between 120 and 160 characters.`,
+Return valid JSON only with slug, label, title, tagline, intro, primaryCta, secondaryCta, benefits (3 to 5 strings), steps (3 to 5 strings), closing, imagePrompt, sections, seoTitle, and seoDescription. Sections must contain 4 to 6 objects with heading, body, items (2 to 5 useful strings), and layout ("cards", "split", "faq", or "steps"). Build a page with a clear information hierarchy and genuinely useful content, not repeated generic filler. Use cards for distinct services/benefits, split for explanatory content, faq only for genuine questions, and steps for process. Use no fabricated testimonials, statistics, awards, certifications, or guarantees. Keep the requested slug and label unchanged. No HTML or markdown. Keep seoTitle under 60 characters and seoDescription between 120 and 160 characters.`,
   });
 
   const result = parseJsonObject(response.output_text, "The AI returned an invalid page draft");
@@ -164,7 +165,12 @@ Return valid JSON only with slug, label, title, tagline, intro, primaryCta, seco
   const hasInvalidText = requiredTextFields.some((field) => typeof result[field] !== "string" || !(result[field] as string).trim()) ||
     ["primaryCta", "secondaryCta", "closing", "imagePrompt"].some((field) => typeof result[field] !== "string");
   const hasInvalidLists = ["benefits", "steps"].some((field) => !Array.isArray(result[field]) || !(result[field] as unknown[]).length || (result[field] as unknown[]).length > 8 || !(result[field] as unknown[]).every((item) => typeof item === "string" && item.trim()));
-  if (result.slug !== input.page.slug || result.label !== input.page.label || hasInvalidText || hasInvalidLists) {
+  const validLayouts = new Set(["cards", "split", "faq", "steps"]);
+  const hasInvalidSections = !Array.isArray(result.sections) || result.sections.length < 3 || result.sections.length > 8 ||
+    !result.sections.every((section) => section && typeof section === "object" && typeof section.heading === "string" && section.heading.trim() &&
+      typeof section.body === "string" && section.body.trim() && Array.isArray(section.items) && section.items.length >= 2 && section.items.length <= 6 &&
+      section.items.every((item: unknown) => typeof item === "string" && item.trim()) && validLayouts.has(section.layout));
+  if (result.slug !== input.page.slug || result.label !== input.page.label || hasInvalidText || hasInvalidLists || hasInvalidSections) {
     throw new Error("The AI returned incomplete page content");
   }
   return {
@@ -183,6 +189,12 @@ Return valid JSON only with slug, label, title, tagline, intro, primaryCta, seco
     steps: (result.steps as string[]).slice(0, 8),
     closing: result.closing as string,
     imagePrompt: result.imagePrompt as string,
+    sections: (result.sections as { heading: string; body: string; items: string[]; layout: "cards" | "split" | "faq" | "steps" }[]).map((section) => ({
+      heading: section.heading.slice(0, 120),
+      body: section.body.slice(0, 1200),
+      items: section.items.map((item) => item.slice(0, 300)),
+      layout: section.layout,
+    })),
     seoTitle: result.seoTitle as string,
     seoDescription: result.seoDescription as string,
   };

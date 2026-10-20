@@ -7,8 +7,9 @@ HelloAI is a Next.js 16.4.0 App Router application using React 19, TypeScript, S
 The application already has useful execution primitives:
 
 - The Website Builder suggests a sitemap first, then generates selected pages one at a time with the full business brief and summaries of other planned/generated pages. Page drafts, page-specific requests, and navigation visibility preferences persist to the user's browser or Supabase `projects` table.
+- Generated pages include structured, varied content sections and use large industry-matched Unsplash hero photography by default. Signed-in users can explicitly request an AI-generated hero image; images are compressed before saving in the browser draft.
 - Hiding a page removes it from the HelloAI preview navigation plan; it does not make the page private. WordPress pages are created as drafts, and WordPress navigation must be updated separately after publishing.
-- The WordPress page workflow can create a selected page as a draft after an explicit confirmation. It does not publish the page publicly.
+- The WordPress page workflow can create a selected page as a draft after an explicit confirmation, upload a custom hero image to the WordPress media library, and include the page's structured sections. It does not publish the page publicly.
 - Website auditing and competitor snapshots retrieve live public web pages.
 - Supabase project rows use `auth.uid()` row-level policies.
 
