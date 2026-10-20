@@ -4,10 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import type { WebsitePagePlan } from "../../lib/website-generator";
 
 type WebsitePage = {
   slug: string;
   label: string;
+  pageType?: string;
+  request?: string;
+  isGenerated?: boolean;
+  showInNavigation?: boolean;
   title: string;
   tagline: string;
   intro: string;
@@ -24,6 +29,18 @@ type WebsiteDraft = { pages: WebsitePage[]; growthPack?: { blogs: { title: strin
 type Photo = { name: string; url: string; fallbackUrl?: string; x: number; y: number };
 type Provider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 type ProviderConnection = { id: string; provider: Provider; label: string };
+
+function hydrateWebsiteDraft(draft?: WebsiteDraft | null): WebsiteDraft | null {
+  if (!draft) return null;
+  return {
+    ...draft,
+    pages: draft.pages.map((page) => ({
+      ...page,
+      isGenerated: page.isGenerated ?? true,
+      showInNavigation: page.showInNavigation ?? true,
+    })),
+  };
+}
 
 function getPhotoQuery(page: WebsitePage, businessDescription: string) {
   const source = page.imagePrompt || `${page.label} ${businessDescription}`;
@@ -56,6 +73,7 @@ export default function WebsiteBuilderPage() {
   const [selectedSlug, setSelectedSlug] = useState("home");
   const [photos, setPhotos] = useState<Record<string, Photo[]>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [error, setError] = useState("");
   const [autoFixNotice] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -76,9 +94,10 @@ export default function WebsiteBuilderPage() {
   const [connectionMessage, setConnectionMessage] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedDraft, setPublishedDraft] = useState<{ title: string; editUrl: string } | null>(null);
-  const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [refinementInstruction, setRefinementInstruction] = useState("");
   const [isRefining, setIsRefining] = useState(false);
+  const [isGeneratingPage, setIsGeneratingPage] = useState(false);
+  const [newPageLabel, setNewPageLabel] = useState("");
   const [accountUserId, setAccountUserId] = useState<string | null>(null);
   const [isResettingProject, setIsResettingProject] = useState(false);
   const [projectMessage, setProjectMessage] = useState("");
@@ -94,7 +113,7 @@ export default function WebsiteBuilderPage() {
       if (saved) {
         try {
           const data = JSON.parse(saved) as { businessName?: string; description?: string; industry?: string; location?: string; phone?: string; email?: string; websiteUrl?: string; services?: string; audience?: string; tone?: string; primaryAction?: string; draft?: WebsiteDraft; photos?: Record<string, Photo[]> };
-          setBusinessName(data.businessName || ""); setDescription(data.description || ""); setIndustry(data.industry || ""); setLocation(data.location || ""); setPhone(data.phone || ""); setEmail(data.email || ""); setWebsiteUrl(data.websiteUrl || ""); setServices(data.services || ""); setAudience(data.audience || ""); setTone(data.tone || "Clear, confident, and human"); setPrimaryAction(data.primaryAction || "Contact the business"); setDraft(data.draft || null);
+          setBusinessName(data.businessName || ""); setDescription(data.description || ""); setIndustry(data.industry || ""); setLocation(data.location || ""); setPhone(data.phone || ""); setEmail(data.email || ""); setWebsiteUrl(data.websiteUrl || ""); setServices(data.services || ""); setAudience(data.audience || ""); setTone(data.tone || "Clear, confident, and human"); setPrimaryAction(data.primaryAction || "Contact the business"); setDraft(hydrateWebsiteDraft(data.draft));
           setPhotos(Object.fromEntries(Object.entries(data.photos || {}).map(([slug, pagePhotos]) => [slug, (pagePhotos as Photo[]).map((photo, index) => ({ ...photo, x: photo.x ?? 5 + (index % 3) * 30, y: photo.y ?? 12 + Math.floor(index / 3) * 28 }))])));
         } catch { /* Ignore stale local drafts. */ }
       }
@@ -120,7 +139,7 @@ export default function WebsiteBuilderPage() {
         draft?: WebsiteDraft;
         photos?: Record<string, Photo[]>;
       };
-      setBusinessName(project.businessName || ""); setDescription(project.description || ""); setIndustry(project.industry || ""); setLocation(project.location || ""); setPhone(project.phone || ""); setEmail(project.email || ""); setWebsiteUrl(project.websiteUrl || ""); setServices(project.services || ""); setAudience(project.audience || ""); setTone(project.tone || "Clear, confident, and human"); setPrimaryAction(project.primaryAction || "Contact the business"); setDraft(project.draft || null); setPhotos(project.photos || {});
+      setBusinessName(project.businessName || ""); setDescription(project.description || ""); setIndustry(project.industry || ""); setLocation(project.location || ""); setPhone(project.phone || ""); setEmail(project.email || ""); setWebsiteUrl(project.websiteUrl || ""); setServices(project.services || ""); setAudience(project.audience || ""); setTone(project.tone || "Clear, confident, and human"); setPrimaryAction(project.primaryAction || "Contact the business"); setDraft(hydrateWebsiteDraft(project.draft)); setPhotos(project.photos || {});
     };
     void loadProject();
   }, []);
@@ -159,6 +178,7 @@ export default function WebsiteBuilderPage() {
       setPrimaryAction("Contact the business");
       setDraft(null);
       setSelectedSlug("home");
+      setNewPageLabel("");
       setPhotos({});
       setProjectMessage("Website project deleted. You can start a new one whenever you’re ready.");
     } catch (resetError) {
@@ -170,22 +190,143 @@ export default function WebsiteBuilderPage() {
 
   const buildWebsite = async (event: FormEvent) => {
     event.preventDefault();
+    if (draft?.pages.some((page) => page.isGenerated !== false) && !window.confirm("Replace the current page plan and generated page drafts? This cannot be undone.")) return;
     setIsLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/website", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction }) });
+      const response = await fetch("/api/website/sitemap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction }) });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to build website");
-      setDraft(data.draft);
-      setSelectedSlug("home");
-      setIsLoadingPhotos(true);
-      const generatedPhotos = Object.fromEntries(data.draft.pages.map((page: WebsitePage, index: number) => [page.slug, [{ name: `${page.label} editorial image`, url: `https://loremflickr.com/1200/800/${encodeURIComponent(getPhotoQuery(page, description))}?lock=${index + 1}`, fallbackUrl: getFallbackPhoto(index), x: 5, y: 12 }]]));
-      setPhotos((current) => ({ ...generatedPhotos, ...current }));
-      setIsLoadingPhotos(false);
+      if (!response.ok) throw new Error(data.error || "Failed to suggest website pages");
+      const pages = (data.pages as WebsitePagePlan[]).map((page) => ({
+        ...page,
+        isGenerated: false,
+        showInNavigation: true,
+        title: "",
+        tagline: "",
+        intro: "",
+        primaryCta: "",
+        secondaryCta: "",
+        benefits: [],
+        steps: [],
+        closing: "",
+        imagePrompt: "",
+        seoTitle: "",
+        seoDescription: "",
+      }));
+      const firstPage = pages.find((page) => page.slug === "home") || pages[0];
+      setDraft({ pages, growthPack: data.growthPack });
+      setSelectedSlug(firstPage.slug);
+      setPhotos({});
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to build website");
+      setError(requestError instanceof Error ? requestError.message : "Failed to suggest website pages");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const generateSelectedPage = async () => {
+    if (!selectedPage || !draft || isGeneratingPage || !description.trim()) return;
+    setIsGeneratingPage(true);
+    setIsLoadingPhotos(true);
+    setError("");
+    try {
+      const response = await fetch("/api/website/page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          page: selectedPage,
+          instruction: selectedPage.request || "",
+          existingPages: draft.pages,
+          businessName,
+          description,
+          industry,
+          location,
+          phone,
+          email,
+          websiteUrl,
+          services,
+          audience,
+          tone,
+          primaryAction,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to generate page");
+      setDraft((current) => current ? {
+        ...current,
+        pages: current.pages.map((page) => page.slug === selectedPage.slug
+          ? { ...page, ...data.page, request: page.request, showInNavigation: page.showInNavigation ?? true }
+          : page),
+      } : current);
+      const photo: Photo = {
+        name: `${selectedPage.label} editorial image`,
+        url: `https://loremflickr.com/1200/800/${encodeURIComponent(getPhotoQuery(data.page, description))}?lock=${draft.pages.findIndex((page) => page.slug === selectedPage.slug) + 1}`,
+        fallbackUrl: getFallbackPhoto(draft.pages.findIndex((page) => page.slug === selectedPage.slug)),
+        x: 5,
+        y: 12,
+      };
+      setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug]?.length ? current[selectedPage.slug] : [photo] }));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to generate page");
+    } finally {
+      setIsGeneratingPage(false);
+      setIsLoadingPhotos(false);
+    }
+  };
+
+  const addPlannedPage = () => {
+    if (!draft || draft.pages.length >= 20 || !newPageLabel.trim()) return;
+    const label = newPageLabel.trim().slice(0, 80);
+    const slug = label.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    if (!slug) {
+      setError("Use at least one letter or number in the page name.");
+      return;
+    }
+    if (draft.pages.some((page) => page.slug === slug)) {
+      setError("A page with that URL already exists. Choose a different page name.");
+      return;
+    }
+    const page: WebsitePage = {
+      slug,
+      label,
+      pageType: "custom",
+      request: `Create a ${label} page based on the business brief.`,
+      isGenerated: false,
+      showInNavigation: true,
+      title: "",
+      tagline: "",
+      intro: "",
+      primaryCta: "",
+      secondaryCta: "",
+      benefits: [],
+      steps: [],
+      closing: "",
+      imagePrompt: "",
+      seoTitle: "",
+      seoDescription: "",
+    };
+    setDraft({ ...draft, pages: [...draft.pages, page] });
+    setSelectedSlug(page.slug);
+    setNewPageLabel("");
+    setError("");
+  };
+
+  const removePlannedPage = (page: WebsitePage) => {
+    if (!draft || draft.pages.length <= 1) {
+      setError("A website plan must have at least one page.");
+      return;
+    }
+    if (!window.confirm(`Remove the ${page.label} page and its draft from this website plan?`)) return;
+    const remainingPages = draft.pages.filter((item) => item.slug !== page.slug);
+    setDraft({ ...draft, pages: remainingPages });
+    setPhotos((current) => {
+      const next = { ...current };
+      delete next[page.slug];
+      return next;
+    });
+    if (selectedSlug === page.slug) {
+      const nextPage = remainingPages[0];
+      setSelectedSlug(nextPage.slug);
     }
   };
 
@@ -232,7 +373,7 @@ export default function WebsiteBuilderPage() {
   };
 
   const refineSelectedPage = async () => {
-    if (!selectedPage || !refinementInstruction.trim()) return;
+    if (!selectedPage || selectedPage.isGenerated === false || !refinementInstruction.trim()) return;
     setIsRefining(true);
     setError("");
     try {
@@ -248,7 +389,7 @@ export default function WebsiteBuilderPage() {
     }
   };
 
-  const updateSelectedPage = (field: keyof WebsitePage, value: string) => {
+  const updateSelectedPage = (field: keyof WebsitePage, value: string | boolean) => {
     if (!draft || !selectedPage) return;
     setDraft({ ...draft, pages: draft.pages.map((page) => page.slug === selectedPage.slug ? { ...page, [field]: value } : page) });
   };
@@ -270,23 +411,52 @@ export default function WebsiteBuilderPage() {
       {projectMessage && <div className="success-banner" role="status">{projectMessage}</div>}
       <div className="website-builder-grid website-builder-grid-wide">
         <section className="website-brief-panel">
-          <span className="eyebrow">BUILD A COMPLETE SITE</span><h1>Shape every page before it goes live.</h1>
-          <p>Generate a site map, review pages one by one, edit the copy, and add your own photos to each page.</p>
-          <form onSubmit={buildWebsite} className="website-form"><label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" required /></label><label>Industry<input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="e.g. Cleaning services" /></label><label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Manchester" /></label><label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. 0161 555 0100" /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="hello@example.com" /></label><label>Existing website <span className="optional-label">optional</span><input type="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://example.com" /></label><label>Services to promote<input value={services} onChange={(event) => setServices(event.target.value)} placeholder="End of tenancy, deep cleaning, carpet cleaning" /></label><label>Business brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label><label>Ideal audience<input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="e.g. Busy homeowners in Manchester" /></label><label>Brand voice<select value={tone} onChange={(event) => setTone(event.target.value)}><option>Clear, confident, and human</option><option>Warm and conversational</option><option>Premium and editorial</option><option>Bold and energetic</option><option>Minimal and trustworthy</option></select></label><label>Primary conversion action<input value={primaryAction} onChange={(event) => setPrimaryAction(event.target.value)} placeholder="e.g. Book a consultation" /></label>{error && <div className="error-banner">{error}</div>}{autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}<button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Building website and growth pack..." : "Build website + growth pack  →"}</button></form>
-          {draft && <div className="page-review-panel"><span className="eyebrow">PAGES TO REVIEW</span>{draft.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage?.slug ? "page-tab selected" : "page-tab"} type="button" onClick={() => setSelectedSlug(page.slug)}><span>{page.label}</span><small>Review and edit</small><b>→</b></button>)}</div>}
+          <span className="eyebrow">PLAN AND BUILD PAGE BY PAGE</span><h1>Make your site one page at a time.</h1>
+          <p>Describe your business, review the suggested page plan, then generate and refine only the pages you want. Your work saves as a draft.</p>
+          <form onSubmit={buildWebsite} className="website-form">
+            <label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" required /></label>
+            <label>Industry<input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="e.g. Cleaning services" /></label>
+            <label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Manchester" /></label>
+            <label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="e.g. 0161 555 0100" /></label>
+            <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="hello@example.com" /></label>
+            <label>Existing website <span className="optional-label">optional</span><input type="url" value={websiteUrl} onChange={(event) => setWebsiteUrl(event.target.value)} placeholder="https://example.com" /></label>
+            <label>Services to promote<input value={services} onChange={(event) => setServices(event.target.value)} placeholder="End of tenancy, deep cleaning, carpet cleaning" /></label>
+            <label>Business brief<textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What do you offer, who is it for, and what should visitors do next?" required /></label>
+            <label>Ideal audience<input value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="e.g. Busy homeowners in Manchester" /></label>
+            <label>Brand voice<select value={tone} onChange={(event) => setTone(event.target.value)}><option>Clear, confident, and human</option><option>Warm and conversational</option><option>Premium and editorial</option><option>Bold and energetic</option><option>Minimal and trustworthy</option></select></label>
+            <label>Primary conversion action<input value={primaryAction} onChange={(event) => setPrimaryAction(event.target.value)} placeholder="e.g. Book a consultation" /></label>
+            {error && <div className="error-banner">{error}</div>}
+            {autoFixNotice && <div className="success-banner">{autoFixNotice}</div>}
+            <button className="primary-button" type="submit" disabled={isLoading}>{isLoading ? "Planning your pages..." : draft ? "Suggest a new page plan →" : "Suggest page plan →"}</button>
+          </form>
+          {draft && <div className="page-review-panel">
+            <div className="page-review-heading"><span className="eyebrow">YOUR PAGE PLAN</span><small>{draft.pages.filter((page) => page.isGenerated !== false).length} of {draft.pages.length} pages generated</small></div>
+            {draft.pages.map((page) => <div className="page-plan-row" key={page.slug}>
+              <button className={page.slug === selectedPage?.slug ? "page-tab selected" : "page-tab"} type="button" onClick={() => setSelectedSlug(page.slug)}>
+                <span>{page.label}</span><small>{page.isGenerated === false ? "Ready to generate" : "Draft ready"}{page.showInNavigation === false ? " · Hidden from navigation" : ""}</small><b>→</b>
+              </button>
+              <button className="page-plan-remove" type="button" aria-label={`Remove ${page.label} from page plan`} onClick={() => removePlannedPage(page)}>×</button>
+            </div>)}
+            <div className="page-plan-add"><input aria-label="New page name" value={newPageLabel} onChange={(event) => setNewPageLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addPlannedPage(); } }} placeholder="Add a page (e.g. Pricing)" /><button type="button" className="secondary-button" onClick={addPlannedPage} disabled={draft.pages.length >= 20 || !newPageLabel.trim()}>Add page</button></div>
+          </div>}
           {draft?.growthPack && <section className="growth-pack-panel"><span className="eyebrow">GROWTH PACK</span><strong>{draft.growthPack.blogs.length} blog ideas · {draft.growthPack.localPages.length} local pages · {draft.growthPack.faq.length} FAQs</strong><div>{draft.growthPack.blogs.slice(0, 4).map((blog) => <p key={blog.title}><b>{blog.title}</b><small>{blog.keyword}</small></p>)}</div></section>}
           <section className="website-publishing-panel"><span className="eyebrow">CONNECT TO PUBLISH</span><strong>{providerConnections.length ? `${providerConnections.length} provider connection${providerConnections.length === 1 ? "" : "s"}` : "Connect website providers"}</strong><p>Connect as many websites and provider accounts as needed. Tokens are sent to the server and not saved in the browser.</p>{providerConnections.length > 0 && <div className="website-connection-list">{providerConnections.map((connection) => <div key={connection.id}><span>{connection.label}</span><small>Verified connection</small></div>)}</div>}{isLoadingPhotos && <div className="success-banner">Adding relevant page imagery...</div>}<select value={provider} onChange={(event) => setProvider(event.target.value as Provider)}><option value="wordpress">WordPress REST API</option><option value="shopify">Shopify Admin API</option><option value="webflow">Webflow API</option><option value="github-vercel">GitHub / Vercel</option><option value="custom">Custom CMS API</option></select>{provider === "wordpress" && <><input placeholder="WordPress site URL" value={providerFields.baseUrl || ""} onChange={(event) => setProviderField("baseUrl", event.target.value)} /><input type="password" placeholder="Application access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "shopify" && <><input placeholder="store.myshopify.com" value={providerFields.shopDomain || ""} onChange={(event) => setProviderField("shopDomain", event.target.value)} /><input type="password" placeholder="Admin API access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "webflow" && <><input placeholder="Webflow site ID" value={providerFields.siteId || ""} onChange={(event) => setProviderField("siteId", event.target.value)} /><input type="password" placeholder="Webflow API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "github-vercel" && <><input placeholder="owner/repository" value={providerFields.repository || ""} onChange={(event) => setProviderField("repository", event.target.value)} /><input placeholder="Vercel project name" value={providerFields.vercelProject || ""} onChange={(event) => setProviderField("vercelProject", event.target.value)} /><input type="password" placeholder="GitHub token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "custom" && <><input placeholder="Custom CMS endpoint" value={providerFields.endpoint || ""} onChange={(event) => setProviderField("endpoint", event.target.value)} /><input type="password" placeholder="CMS API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}<button type="button" className="secondary-button" onClick={connectProvider} disabled={isConnecting}>{isConnecting ? "Verifying connection..." : "Verify and connect another"}</button>{connectionMessage && <div className="success-banner">{connectionMessage}</div>}</section>
         </section>
         <section className="website-preview-frame">
-          {selectedPage ? <div className="website-preview">
-            <div className="preview-nav"><strong>{businessName || selectedPage.title}</strong><span>{draft?.pages.map((page) => <button key={page.slug} className={page.slug === selectedPage.slug ? "preview-nav-active" : ""} type="button" onClick={() => setSelectedSlug(page.slug)}>{page.label}</button>)}</span></div>
+          {selectedPage ? (selectedPage.isGenerated === false ? <div className="website-plan-preview">
+            <span className="eyebrow">PAGE PLAN · /{selectedPage.slug}</span>
+            <h2>{selectedPage.label}</h2>
+            <p>This page is planned but its content has not been generated. Add any page-specific details in the editor, then generate this page when you’re ready.</p>
+            <div className="page-visibility-notice">Hidden from navigation means it won’t appear in this site menu. It is not private: after publishing, anyone with its direct URL may be able to visit it.</div>
+          </div> : <div className="website-preview">
+            <div className="preview-nav"><strong>{businessName || selectedPage.title}</strong><span>{draft?.pages.filter((page) => page.isGenerated !== false && page.showInNavigation !== false).map((page) => <button key={page.slug} className={page.slug === selectedPage.slug ? "preview-nav-active" : ""} type="button" onClick={() => setSelectedSlug(page.slug)}>{page.label}</button>)}</span></div>
             <div className="preview-hero"><span className="preview-badge">{selectedPage.label.toUpperCase()}</span><h2>{selectedPage.title}</h2><p>{selectedPage.tagline}</p><div className="preview-actions"><button>{selectedPage.primaryCta}</button><button className="outline-button">{selectedPage.secondaryCta}</button></div></div>
             <div className="preview-intro"><p>{selectedPage.intro}</p></div>
             {(photos[selectedPage.slug] || []).length > 0 && <div className="preview-photo-canvas" onPointerMove={(event) => { if (!draggingPhoto || draggingPhoto.pageSlug !== selectedPage.slug) return; const bounds = event.currentTarget.getBoundingClientRect(); const x = Math.max(0, Math.min(78, ((event.clientX - bounds.left) / bounds.width) * 100 - 10)); const y = Math.max(0, Math.min(78, ((event.clientY - bounds.top) / bounds.height) * 100 - 10)); setPhotos((current) => ({ ...current, [selectedPage.slug]: current[selectedPage.slug].map((photo) => photo.name === draggingPhoto.name ? { ...photo, x, y } : photo) })); }} onPointerUp={() => setDraggingPhoto(null)} onPointerLeave={() => setDraggingPhoto(null)}><span className="canvas-label">DRAG PHOTOS INTO PLACE</span>{photos[selectedPage.slug].map((photo) => <Image key={photo.name + photo.url} src={photo.url} alt={photo.name} draggable={false} width={480} height={320} unoptimized style={{ left: `${photo.x ?? 5}%`, top: `${photo.y ?? 12}%` }} onError={(event) => { const fallbackUrl = (photo as Photo & { fallbackUrl?: string }).fallbackUrl; if (fallbackUrl && event.currentTarget.src !== fallbackUrl) event.currentTarget.src = fallbackUrl; }} onPointerDown={(event) => { event.preventDefault(); setDraggingPhoto({ pageSlug: selectedPage.slug, name: photo.name }); }} />)}</div>}
             <div className="preview-benefits">{selectedPage.benefits.map((benefit, index) => <article key={benefit + index}><span>0{index + 1}</span><h3>{benefit}</h3><p>Designed around what matters to your customers.</p></article>)}</div>
             <div className="preview-steps"><span className="eyebrow">HOW IT WORKS</span><div>{selectedPage.steps.map((step, index) => <p key={step + index}><b>0{index + 1}</b>{step}</p>)}</div></div><div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
-          </div> : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
-          {selectedPage && provider === "wordpress" && <div className="website-publish-action">
+          </div>) : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
+          {selectedPage && selectedPage.isGenerated !== false && provider === "wordpress" && <div className="website-publish-action">
             <span className="eyebrow">WORDPRESS</span>
             <strong>Create a reviewable draft</strong>
             <p>This sends the selected page copy to WordPress as a private draft. It will not publish the page publicly.</p>
@@ -297,7 +467,24 @@ export default function WebsiteBuilderPage() {
             {publishedDraft && publishedDraft.title === selectedPage.title && <div className="success-banner">Draft created. <a href={publishedDraft.editUrl} target="_blank" rel="noreferrer">Review it in WordPress →</a></div>}
           </div>}
         </section>
-        {selectedPage && <aside className="website-editor-panel"><span className="eyebrow">EDIT {selectedPage.label.toUpperCase()}</span><h2>Page controls</h2><div className="ai-refine-panel"><span className="eyebrow">AI PAGE DIRECTOR</span><textarea value={refinementInstruction} onChange={(event) => setRefinementInstruction(event.target.value)} placeholder="e.g. Make this feel more premium and add a stronger booking CTA" /><button type="button" className="secondary-button" onClick={refineSelectedPage} disabled={isRefining || !refinementInstruction.trim()}>{isRefining ? "Refining page..." : "Refine with AI"}</button></div><label>Headline<input value={selectedPage.title} onChange={(event) => updateSelectedPage("title", event.target.value)} /></label><label>Tagline<textarea value={selectedPage.tagline} onChange={(event) => updateSelectedPage("tagline", event.target.value)} /></label><label>Intro<textarea value={selectedPage.intro} onChange={(event) => updateSelectedPage("intro", event.target.value)} /></label><label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label><label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label><div className="seo-panel"><div className="seo-panel-heading"><span className="eyebrow">SEO READINESS</span><strong>{seoChecks}/4</strong></div><label>SEO title <small>{seoTitleLength}/60 characters</small><input value={selectedPage.seoTitle || ""} onChange={(event) => updateSelectedPage("seoTitle", event.target.value)} /></label><label>SEO description <small>{seoDescriptionLength}/160 characters</small><textarea value={selectedPage.seoDescription || ""} onChange={(event) => updateSelectedPage("seoDescription", event.target.value)} /></label><p>Use a clear service, location, and customer outcome. These fields become your search preview.</p></div><div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><Image src={photo.url} alt={photo.name} width={160} height={120} unoptimized /><span>{photo.name}</span></div>)}</div></aside>}
+        {selectedPage && <aside className="website-editor-panel">
+          <span className="eyebrow">EDIT {selectedPage.label.toUpperCase()}</span>
+          <h2>{selectedPage.isGenerated === false ? "Page plan" : "Page controls"}</h2>
+          <label className="page-navigation-toggle"><input type="checkbox" checked={selectedPage.showInNavigation !== false} onChange={(event) => updateSelectedPage("showInNavigation", event.target.checked)} /><span>Show in site navigation</span></label>
+          <p className="page-visibility-notice">Turn this off to keep the page out of the navigation menu. It does not make the page private; visitors may still access its direct URL after publishing. This is a site-plan preference; update WordPress menus separately.</p>
+          {selectedPage.isGenerated === false ? <>
+            <div className="ai-refine-panel"><span className="eyebrow">PAGE-SPECIFIC REQUEST</span><textarea value={selectedPage.request || ""} onChange={(event) => updateSelectedPage("request", event.target.value)} placeholder="Tell HelloAI what this page should cover, what to include, or what to avoid." /><button type="button" className="primary-button" onClick={() => void generateSelectedPage()} disabled={isGeneratingPage || !description.trim()}>{isGeneratingPage ? "Writing this page..." : "Generate this page →"}</button><small>HelloAI will generate only this page. You can review and edit it before creating a WordPress draft.</small></div>
+          </> : <>
+            <div className="ai-refine-panel"><span className="eyebrow">AI PAGE DIRECTOR</span><textarea value={refinementInstruction} onChange={(event) => setRefinementInstruction(event.target.value)} placeholder="e.g. Make this feel more premium and add a stronger booking CTA" /><button type="button" className="secondary-button" onClick={refineSelectedPage} disabled={isRefining || !refinementInstruction.trim()}>{isRefining ? "Refining page..." : "Refine with AI"}</button></div>
+            <label>Headline<input value={selectedPage.title} onChange={(event) => updateSelectedPage("title", event.target.value)} /></label>
+            <label>Tagline<textarea value={selectedPage.tagline} onChange={(event) => updateSelectedPage("tagline", event.target.value)} /></label>
+            <label>Intro<textarea value={selectedPage.intro} onChange={(event) => updateSelectedPage("intro", event.target.value)} /></label>
+            <label>Primary button<input value={selectedPage.primaryCta} onChange={(event) => updateSelectedPage("primaryCta", event.target.value)} /></label>
+            <label>Secondary button<input value={selectedPage.secondaryCta} onChange={(event) => updateSelectedPage("secondaryCta", event.target.value)} /></label>
+            <div className="seo-panel"><div className="seo-panel-heading"><span className="eyebrow">SEO READINESS</span><strong>{seoChecks}/4</strong></div><label>SEO title <small>{seoTitleLength}/60 characters</small><input value={selectedPage.seoTitle || ""} onChange={(event) => updateSelectedPage("seoTitle", event.target.value)} /></label><label>SEO description <small>{seoDescriptionLength}/160 characters</small><textarea value={selectedPage.seoDescription || ""} onChange={(event) => updateSelectedPage("seoDescription", event.target.value)} /></label><p>Use a clear service, location, and customer outcome. These fields become your search preview.</p></div>
+            <div className="photo-upload"><span className="eyebrow">PAGE PHOTOS</span><p>Add photos to this page preview.</p><label className="upload-button">+ Add photos<input type="file" accept="image/*" multiple onChange={addPhotos} /></label>{(photos[selectedPage.slug] || []).map((photo) => <div className="uploaded-photo" key={photo.name + photo.url}><Image src={photo.url} alt={photo.name} width={160} height={120} unoptimized /><span>{photo.name}</span></div>)}</div>
+          </>}
+        </aside>}
       </div>
     </main>
   );

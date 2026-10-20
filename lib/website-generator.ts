@@ -4,6 +4,9 @@ export type WebsitePage = {
   slug: string;
   label: string;
   pageType?: string;
+  request?: string;
+  isGenerated?: boolean;
+  showInNavigation?: boolean;
   title: string;
   tagline: string;
   intro: string;
@@ -42,6 +45,148 @@ export type WebsiteGenerationInput = {
   tone?: string;
   primaryAction?: string;
 };
+
+export type WebsitePagePlan = Pick<WebsitePage, "slug" | "label" | "pageType" | "request">;
+
+function parseJsonObject(output: string, errorMessage: string): Record<string, unknown> {
+  const start = output.indexOf("{");
+  const end = output.lastIndexOf("}");
+  if (start === -1 || end < start) throw new Error(errorMessage);
+  const parsed: unknown = JSON.parse(output.slice(start, end + 1));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(errorMessage);
+  return parsed as Record<string, unknown>;
+}
+
+function makeSlug(value: string) {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
+export function parseWebsiteSitemap(output: string): { pages: WebsitePagePlan[]; growthPack?: WebsiteDraft["growthPack"] } {
+  const result = parseJsonObject(output, "The AI returned an invalid page plan");
+  if (!Array.isArray(result.pages) || result.pages.length < 1 || result.pages.length > 20) {
+    throw new Error("The AI returned an empty or oversized page plan");
+  }
+
+  const slugs = new Set<string>();
+  const pages = result.pages.map((page): WebsitePagePlan => {
+    if (!page || typeof page !== "object" || Array.isArray(page)) throw new Error("The AI returned an invalid page in the site map");
+    const record = page as Record<string, unknown>;
+    const label = typeof record.label === "string" ? record.label.trim().slice(0, 80) : "";
+    const slug = typeof record.slug === "string" ? makeSlug(record.slug) : makeSlug(label);
+    if (!label || !slug || slugs.has(slug)) throw new Error("The AI returned an incomplete or duplicate page in the site map");
+    slugs.add(slug);
+    return {
+      slug,
+      label,
+      pageType: typeof record.pageType === "string" ? record.pageType.slice(0, 60) : "standard",
+      request: typeof record.request === "string" ? record.request.slice(0, 500) : `Create a useful ${label} page based on the business brief.`,
+    };
+  });
+  if (!slugs.has("home")) throw new Error("The page plan must include a home page");
+
+  let growthPack: WebsiteDraft["growthPack"];
+  if (result.growthPack && typeof result.growthPack === "object" && !Array.isArray(result.growthPack)) {
+    const candidate = result.growthPack as Record<string, unknown>;
+    if (
+      Array.isArray(candidate.blogs) &&
+      candidate.blogs.every((blog) => blog && typeof blog === "object" && typeof blog.title === "string" && typeof blog.keyword === "string" && typeof blog.outline === "string") &&
+      Array.isArray(candidate.localPages) &&
+      candidate.localPages.every((page) => typeof page === "string") &&
+      Array.isArray(candidate.faq) &&
+      candidate.faq.every((item) => item && typeof item === "object" && typeof item.question === "string" && typeof item.answer === "string")
+    ) {
+      growthPack = candidate as WebsiteDraft["growthPack"];
+    }
+  }
+  return { pages, growthPack };
+}
+
+export async function generateWebsiteSitemap(input: WebsiteGenerationInput) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+  if (!input.description.trim()) throw new Error("A website brief is required");
+
+  const openai = new OpenAI({ apiKey, timeout: 90_000, maxRetries: 1 });
+  const response = await openai.responses.create({
+    model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
+    text: { format: { type: "json_object" } },
+    input: `Plan the page structure for a small-business website for ${input.businessName || "this business"}. Do not write the full page copy yet; each page will be generated and reviewed separately.
+
+Business brief: ${input.description}
+Industry: ${input.industry || "Not specified"}
+Location: ${input.location || "Not specified"}
+Known services: ${input.services || "Infer from the brief"}
+Audience: ${input.audience || "Not specified"}
+Primary conversion action: ${input.primaryAction || "Contact the business"}
+
+Return JSON with pages and growthPack. Create 5 to 12 relevant pages, including a home page with slug "home" and pages such as about, services, contact, FAQ, or bookings only when appropriate. Include pages for specifically requested services. Every page needs a unique slug, a concise customer-facing label, pageType, and a specific request describing the content to write when that page is generated. Do not generate page copy in this step. Include four blog ideas, justified local pages, and FAQs in growthPack. Avoid unnecessary or duplicate pages, fake claims, and placeholder text.`,
+  });
+  return parseWebsiteSitemap(response.output_text);
+}
+
+export async function generateWebsitePage(input: {
+  business: WebsiteGenerationInput;
+  page: WebsitePagePlan;
+  instruction?: string;
+  existingPages: Pick<WebsitePage, "label" | "slug" | "title" | "intro" | "isGenerated">[];
+}): Promise<WebsitePage> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+  if (!input.business.description.trim()) throw new Error("A website brief is required");
+  if (!input.page.label.trim() || !makeSlug(input.page.slug)) throw new Error("A valid planned page is required");
+
+  const openai = new OpenAI({ apiKey, timeout: 90_000, maxRetries: 1 });
+  const response = await openai.responses.create({
+    model: process.env.HELLOAI_CHAT_MODEL || "gpt-4.1-mini",
+    text: { format: { type: "json_object" } },
+    input: `Write only this one customer-facing website page for ${input.business.businessName || "the business"}. Do not write any other pages.
+
+Business brief: ${input.business.description}
+Industry: ${input.business.industry || "Not specified"}
+Location: ${input.business.location || "Not specified"}
+Phone: ${input.business.phone || "Not specified"}
+Email: ${input.business.email || "Not specified"}
+Services: ${input.business.services || "Not specified"}
+Audience: ${input.business.audience || "Not specified"}
+Brand voice: ${input.business.tone || "Clear, confident, and human"}
+Primary action: ${input.business.primaryAction || "Contact the business"}
+
+Page label: ${input.page.label}
+Page type: ${input.page.pageType || "standard"}
+Page-specific brief: ${input.instruction?.trim() || input.page.request || "Write the most useful version of this page for the customer."}
+Other pages already in the plan: ${JSON.stringify(input.existingPages.filter((page) => page.slug !== input.page.slug).map(({ label, slug, title, intro, isGenerated }) => ({ label, slug, title: isGenerated ? title : "", summary: isGenerated ? intro.slice(0, 300) : "" })))}
+
+Return valid JSON only with slug, label, title, tagline, intro, primaryCta, secondaryCta, benefits (3 to 5 strings), steps (3 to 5 strings), closing, imagePrompt, seoTitle, and seoDescription. Keep the requested slug and label unchanged. Use specific credible copy, no invented credentials or guarantees, no HTML or markdown. Keep seoTitle under 60 characters and seoDescription between 120 and 160 characters.`,
+  });
+
+  const result = parseJsonObject(response.output_text, "The AI returned an invalid page draft");
+  const requiredTextFields = ["title", "tagline", "intro", "seoTitle", "seoDescription"];
+  const hasInvalidText = requiredTextFields.some((field) => typeof result[field] !== "string" || !(result[field] as string).trim()) ||
+    ["primaryCta", "secondaryCta", "closing", "imagePrompt"].some((field) => typeof result[field] !== "string");
+  const hasInvalidLists = ["benefits", "steps"].some((field) => !Array.isArray(result[field]) || !(result[field] as unknown[]).length || (result[field] as unknown[]).length > 8 || !(result[field] as unknown[]).every((item) => typeof item === "string" && item.trim()));
+  if (result.slug !== input.page.slug || result.label !== input.page.label || hasInvalidText || hasInvalidLists) {
+    throw new Error("The AI returned incomplete page content");
+  }
+  return {
+    slug: input.page.slug,
+    label: input.page.label,
+    pageType: input.page.pageType,
+    request: input.instruction?.trim() || input.page.request,
+    isGenerated: true,
+    showInNavigation: true,
+    title: result.title as string,
+    tagline: result.tagline as string,
+    intro: result.intro as string,
+    primaryCta: result.primaryCta as string,
+    secondaryCta: result.secondaryCta as string,
+    benefits: (result.benefits as string[]).slice(0, 8),
+    steps: (result.steps as string[]).slice(0, 8),
+    closing: result.closing as string,
+    imagePrompt: result.imagePrompt as string,
+    seoTitle: result.seoTitle as string,
+    seoDescription: result.seoDescription as string,
+  };
+}
 
 export function parseWebsiteDraft(output: string): WebsiteDraft {
   const start = output.indexOf("{");
