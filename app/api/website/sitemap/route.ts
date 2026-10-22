@@ -1,3 +1,4 @@
+import { rateLimit } from "../../../../lib/rate-limit";
 import { generateWebsiteSitemap } from "../../../../lib/website-generator";
 
 function optionalText(value: unknown, label: string, maxLength: number) {
@@ -7,6 +8,9 @@ function optionalText(value: unknown, label: string, maxLength: number) {
 }
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request, "website-sitemap", 10, 10 * 60_000);
+  if (limited) return limited;
+
   try {
     const body = await request.json() as Record<string, unknown>;
     if (!body || typeof body !== "object" || Array.isArray(body)) {

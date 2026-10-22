@@ -1,7 +1,11 @@
 import OpenAI from "openai";
 import { getAuthenticatedSupabase } from "../../../../lib/agent-auth";
+import { rateLimit } from "../../../../lib/rate-limit";
 
 export async function POST(request: Request) {
+  const limited = rateLimit(request, "website-image", 5, 10 * 60_000);
+  if (limited) return limited;
+
   try {
     const authentication = await getAuthenticatedSupabase(request);
     if ("error" in authentication) return authentication.error;

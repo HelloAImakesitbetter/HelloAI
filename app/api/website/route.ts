@@ -1,6 +1,10 @@
+import { rateLimit } from "../../../lib/rate-limit";
 import { generateWebsiteDraft } from "../../../lib/website-generator";
 
 export async function POST(req: Request) {
+  const limited = rateLimit(req, "website", 10, 10 * 60_000);
+  if (limited) return limited;
+
   try {
     const { businessName, description, industry, location, phone, email, websiteUrl, services, audience, tone, primaryAction } = (await req.json()) as { businessName?: string; description?: string; industry?: string; location?: string; phone?: string; email?: string; websiteUrl?: string; services?: string; audience?: string; tone?: string; primaryAction?: string };
 

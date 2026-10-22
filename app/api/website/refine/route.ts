@@ -1,8 +1,12 @@
 import OpenAI from "openai";
+import { rateLimit } from "../../../../lib/rate-limit";
 
 type Page = Record<string, unknown>;
 
 export async function POST(req: Request) {
+  const limited = rateLimit(req, "website-refine", 30, 10 * 60_000);
+  if (limited) return limited;
+
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
