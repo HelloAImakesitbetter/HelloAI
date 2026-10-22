@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import type { WebsitePagePlan } from "../../lib/website-generator";
+import { buildZip, exportEmbedHtml, exportPageHtml, pageFileName } from "../../lib/website-export";
 
 type WebsitePage = {
   slug: string;
@@ -462,6 +463,57 @@ export default function WebsiteBuilderPage() {
 
   const setProviderField = (key: string, value: string) => setProviderFields((current) => ({ ...current, [key]: value }));
 
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadSiteZip = () => {
+    if (!draft) return;
+    const generated = draft.pages.filter((page) => page.isGenerated !== false);
+    if (!generated.length) return;
+    downloadBlob(buildZip(generated.map((page) => ({ name: pageFileName(page), content: exportPageHtml(page, businessName, generated, photos) }))), `${(businessName || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-site.zip`);
+  };
+
+  const copyEmbedCode = async () => {
+    if (!selectedPage) return;
+    try {
+      await navigator.clipboard.writeText(exportEmbedHtml(selectedPage, businessName, photos));
+      setConnectionMessage("Embed code copied. Paste it into a Wix Embed HTML element, a Squarespace code block, or any HTML field.");
+    } catch {
+      setError("Could not copy to the clipboard. Use the download option instead.");
+    }
+  };
+
+  const publishToProvider = async () => {
+    if (!selectedPage || isPublishing || (provider !== "shopify" && provider !== "github-vercel")) return;
+    const target = provider === "shopify" ? "an unpublished Shopify page" : `a "helloai-pages" branch in ${providerFields.repository || "your repository"}`;
+    if (!window.confirm(`Send "${selectedPage.title}" to ${target}? It will not go live automatically.`)) return;
+
+    setIsPublishing(true);
+    setError("");
+    setPublishedDraft(null);
+    try {
+      const response = await fetch("/api/website/publish-provider", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, shopDomain: providerFields.shopDomain, repository: providerFields.repository, token: providerFields.token, businessName, heroImage: heroPhoto?.url, page: selectedPage }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Publishing failed");
+      setPublishedDraft({ title: selectedPage.title, editUrl: data.url });
+      setConnectionMessage(data.message);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Publishing failed");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   const createWordPressDraft = async () => {
     if (!selectedPage || !providerFields.baseUrl?.trim() || !providerFields.username?.trim() || !providerFields.token?.trim() || isPublishing) return;
     if (!window.confirm(`Create "${selectedPage.title}" as a WordPress draft? It will not be public until you publish it in WordPress.`)) return;
@@ -668,6 +720,20 @@ export default function WebsiteBuilderPage() {
             </>}
             <div className="preview-closing"><h3>{selectedPage.closing}</h3><button>{selectedPage.primaryCta}</button></div>
           </div>) : <div className="website-empty"><div>✦</div><h2>Your website preview will appear here.</h2><p>Start with the business brief on the left.</p></div>}
+          {selectedPage && selectedPage.isGenerated !== false && <div className="website-publish-action">
+            <span className="eyebrow">ANY PLATFORM</span>
+            <strong>Wix, Squarespace, Shopify, or any host</strong>
+            <p>Download every generated page as a ready-to-upload HTML site, or copy a page as embed code to paste into Wix (Embed HTML), Squarespace (code block) or any page builder.</p>
+            <button className="primary-button" type="button" onClick={downloadSiteZip}>Download site (.zip) →</button>
+            <button className="secondary-button" type="button" onClick={() => void copyEmbedCode()}>Copy embed code for this page</button>
+          </div>}
+          {selectedPage && selectedPage.isGenerated !== false && (provider === "shopify" || provider === "github-vercel") && <div className="website-publish-action">
+            <span className="eyebrow">{provider === "shopify" ? "SHOPIFY" : "GITHUB"}</span>
+            <strong>{provider === "shopify" ? "Create an unpublished Shopify page" : "Commit this page to a review branch"}</strong>
+            <p>{provider === "shopify" ? "The page is created hidden in your store. Review and publish it in Shopify admin." : "The page is committed as HTML to a separate helloai-pages branch. Merge it to deploy through Vercel, Netlify or GitHub Pages."}</p>
+            <button className="primary-button" type="button" onClick={() => void publishToProvider()} disabled={isPublishing || !providerFields.token?.trim() || (provider === "shopify" ? !providerFields.shopDomain?.trim() : !providerFields.repository?.trim())}>{isPublishing ? "Sending..." : provider === "shopify" ? "Create Shopify page →" : "Commit to GitHub →"}</button>
+            {publishedDraft && publishedDraft.title === selectedPage.title && <div className="success-banner">Done. <a href={publishedDraft.editUrl} target="_blank" rel="noreferrer">Open it →</a></div>}
+          </div>}
           {selectedPage && selectedPage.isGenerated !== false && provider === "wordpress" && <div className="website-publish-action">
             <span className="eyebrow">WORDPRESS</span>
             <strong>Create a reviewable draft</strong>
