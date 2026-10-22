@@ -31,6 +31,8 @@ type Photo = { name: string; url: string; fallbackUrl?: string; x: number; y: nu
 type Provider = "wordpress" | "shopify" | "webflow" | "github-vercel" | "custom";
 type ProviderConnection = { id: string; provider: Provider; label: string };
 const MAX_SAVED_IMAGE_DATA_URL_CHARS = 1_800_000;
+const MAX_WEBSITE_PAGES = 200;
+const MAX_BULK_LOCAL_PAGES = 50;
 const WEBSITE_STORAGE_FULL_EVENT = "helloai-website-storage-full";
 const WEBSITE_STORAGE_SAVED_EVENT = "helloai-website-storage-saved";
 
@@ -141,6 +143,8 @@ export default function WebsiteBuilderPage() {
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
   const [newPageLabel, setNewPageLabel] = useState("");
+  const [localService, setLocalService] = useState("");
+  const [localAreas, setLocalAreas] = useState("");
   const [accountUserId, setAccountUserId] = useState<string | null>(null);
   const [isResettingProject, setIsResettingProject] = useState(false);
   const [projectMessage, setProjectMessage] = useState("");
@@ -295,7 +299,9 @@ export default function WebsiteBuilderPage() {
         body: JSON.stringify({
           page: selectedPage,
           instruction: selectedPage.request || "",
-          existingPages: draft.pages,
+          existingPages: [...draft.pages.filter((page) => page.slug !== selectedPage.slug && page.isGenerated !== false && page.pageType !== "local"), ...draft.pages.filter((page) => page.slug !== selectedPage.slug && (page.isGenerated === false || page.pageType === "local"))]
+            .slice(0, 20)
+            .map(({ slug, label, title, intro, isGenerated }) => ({ slug, label, title, intro: intro.slice(0, 300), isGenerated })),
           businessName,
           description,
           industry,
@@ -334,8 +340,55 @@ export default function WebsiteBuilderPage() {
     }
   };
 
+  const addLocalPages = () => {
+    if (!draft) return;
+    const service = localService.trim().slice(0, 60);
+    const areas = Array.from(new Set(localAreas.split(/[,\n]/).map((area) => area.trim().slice(0, 50)).filter(Boolean))).slice(0, MAX_BULK_LOCAL_PAGES);
+    if (!areas.length) {
+      setError("Enter at least one area, separated by commas or new lines.");
+      return;
+    }
+    const makeSlug = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    const usedSlugs = new Set(draft.pages.map((page) => page.slug));
+    const newPages: WebsitePage[] = [];
+    for (const area of areas) {
+      if (draft.pages.length + newPages.length >= MAX_WEBSITE_PAGES) break;
+      const label = (service ? `${service} in ${area}` : area).slice(0, 80);
+      const slug = makeSlug(label);
+      if (!slug || usedSlugs.has(slug)) continue;
+      usedSlugs.add(slug);
+      newPages.push({
+        slug,
+        label,
+        pageType: "local",
+        request: `Write a genuinely useful local landing page for ${area}${service ? ` about ${service}` : ""}. Mention ${area} naturally and only include local details that are supported by the business brief. Do not invent addresses, local statistics, customer names, reviews, or claims. Make it distinct from the pages for other areas.`,
+        isGenerated: false,
+        showInNavigation: false,
+        title: "",
+        tagline: "",
+        intro: "",
+        primaryCta: "",
+        secondaryCta: "",
+        benefits: [],
+        steps: [],
+        closing: "",
+        imagePrompt: "",
+        seoTitle: "",
+        seoDescription: "",
+      });
+    }
+    if (!newPages.length) {
+      setError("Those pages already exist or the page limit has been reached.");
+      return;
+    }
+    setDraft({ ...draft, pages: [...draft.pages, ...newPages] });
+    setLocalAreas("");
+    setError("");
+    setProjectMessage(`Added ${newPages.length} local page${newPages.length === 1 ? "" : "s"}. They're hidden from navigation by default and ready to generate one at a time.`);
+  };
+
   const addPlannedPage = () => {
-    if (!draft || draft.pages.length >= 20 || !newPageLabel.trim()) return;
+    if (!draft || draft.pages.length >= MAX_WEBSITE_PAGES || !newPageLabel.trim()) return;
     const label = newPageLabel.trim().slice(0, 80);
     const slug = label.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
     if (!slug) {
@@ -580,7 +633,14 @@ export default function WebsiteBuilderPage() {
               </button>
               <button className="page-plan-remove" type="button" aria-label={`Remove ${page.label} from page plan`} onClick={() => removePlannedPage(page)}>×</button>
             </div>)}
-            <div className="page-plan-add"><input aria-label="New page name" value={newPageLabel} onChange={(event) => setNewPageLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addPlannedPage(); } }} placeholder="Add a page (e.g. Pricing)" /><button type="button" className="secondary-button" onClick={addPlannedPage} disabled={draft.pages.length >= 20 || !newPageLabel.trim()}>Add page</button></div>
+            <div className="page-plan-add"><input aria-label="New page name" value={newPageLabel} onChange={(event) => setNewPageLabel(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addPlannedPage(); } }} placeholder="Add a page (e.g. Pricing)" /><button type="button" className="secondary-button" onClick={addPlannedPage} disabled={draft.pages.length >= MAX_WEBSITE_PAGES || !newPageLabel.trim()}>Add page</button></div>
+            <div className="page-plan-local">
+              <span className="eyebrow">LOCAL AREA PAGES</span>
+              <input aria-label="Service for local pages" value={localService} onChange={(event) => setLocalService(event.target.value)} placeholder="Service (optional), e.g. House cleaning" />
+              <textarea aria-label="Areas for local pages" value={localAreas} onChange={(event) => setLocalAreas(event.target.value)} placeholder="Areas, separated by commas or new lines, e.g. Didsbury, Salford, Stockport" />
+              <button type="button" className="secondary-button" onClick={addLocalPages} disabled={draft.pages.length >= MAX_WEBSITE_PAGES || !localAreas.trim()}>Add local pages</button>
+              <small>Up to {MAX_BULK_LOCAL_PAGES} at a time, {MAX_WEBSITE_PAGES} pages per site. Each is hidden from navigation by default and written separately so the copy isn’t duplicated.</small>
+            </div>
           </div>}
           {draft?.growthPack && <section className="growth-pack-panel"><span className="eyebrow">GROWTH PACK</span><strong>{draft.growthPack.blogs.length} blog ideas · {draft.growthPack.localPages.length} local pages · {draft.growthPack.faq.length} FAQs</strong><div>{draft.growthPack.blogs.slice(0, 4).map((blog) => <p key={blog.title}><b>{blog.title}</b><small>{blog.keyword}</small></p>)}</div></section>}
           <section className="website-publishing-panel"><span className="eyebrow">CONNECT TO PUBLISH</span><strong>{providerConnections.length ? `${providerConnections.length} provider connection${providerConnections.length === 1 ? "" : "s"}` : "Connect website providers"}</strong><p>Connect as many websites and provider accounts as needed. Tokens are sent to the server and not saved in the browser.</p>{providerConnections.length > 0 && <div className="website-connection-list">{providerConnections.map((connection) => <div key={connection.id}><span>{connection.label}</span><small>Verified connection</small></div>)}</div>}{isLoadingPhotos && <div className="success-banner">Adding relevant page imagery...</div>}<select value={provider} onChange={(event) => setProvider(event.target.value as Provider)}><option value="wordpress">WordPress REST API</option><option value="shopify">Shopify Admin API</option><option value="webflow">Webflow API</option><option value="github-vercel">GitHub / Vercel</option><option value="custom">Custom CMS API</option></select>{provider === "wordpress" && <><input placeholder="WordPress site URL" value={providerFields.baseUrl || ""} onChange={(event) => setProviderField("baseUrl", event.target.value)} /><input type="password" placeholder="Application access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "shopify" && <><input placeholder="store.myshopify.com" value={providerFields.shopDomain || ""} onChange={(event) => setProviderField("shopDomain", event.target.value)} /><input type="password" placeholder="Admin API access token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "webflow" && <><input placeholder="Webflow site ID" value={providerFields.siteId || ""} onChange={(event) => setProviderField("siteId", event.target.value)} /><input type="password" placeholder="Webflow API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "github-vercel" && <><input placeholder="owner/repository" value={providerFields.repository || ""} onChange={(event) => setProviderField("repository", event.target.value)} /><input placeholder="Vercel project name" value={providerFields.vercelProject || ""} onChange={(event) => setProviderField("vercelProject", event.target.value)} /><input type="password" placeholder="GitHub token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}{provider === "custom" && <><input placeholder="Custom CMS endpoint" value={providerFields.endpoint || ""} onChange={(event) => setProviderField("endpoint", event.target.value)} /><input type="password" placeholder="CMS API token" value={providerFields.token || ""} onChange={(event) => setProviderField("token", event.target.value)} /></>}<button type="button" className="secondary-button" onClick={connectProvider} disabled={isConnecting}>{isConnecting ? "Verifying connection..." : "Verify and connect another"}</button>{connectionMessage && <div className="success-banner">{connectionMessage}</div>}</section>
