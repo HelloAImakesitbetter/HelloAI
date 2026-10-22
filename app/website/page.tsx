@@ -6,6 +6,7 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import type { WebsitePagePlan } from "../../lib/website-generator";
 import { buildZip, exportEmbedHtml, exportPageHtml, pageFileName } from "../../lib/website-export";
+import { WEBSITE_TEMPLATES, type WebsiteTemplate } from "../../lib/website-templates";
 
 type WebsitePage = {
   slug: string;
@@ -105,6 +106,7 @@ function compressWebsiteImage(dataUrl: string) {
 export default function WebsiteBuilderPage() {
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
+  const [activeTemplate, setActiveTemplate] = useState("");
   const [industry, setIndustry] = useState("");
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
@@ -463,6 +465,18 @@ export default function WebsiteBuilderPage() {
 
   const setProviderField = (key: string, value: string) => setProviderFields((current) => ({ ...current, [key]: value }));
 
+  const applyTemplate = (template: WebsiteTemplate) => {
+    if ((draft || description.trim()) && !window.confirm("Replace your current brief with this template? Your generated pages are kept until you build a new plan.")) return;
+    setActiveTemplate(template.id);
+    setIndustry(template.brief.industry);
+    setDescription(template.brief.description);
+    setServices(template.brief.services);
+    setAudience(template.brief.audience);
+    setTone(template.brief.tone);
+    setPrimaryAction(template.brief.primaryAction);
+    setProjectMessage(`"${template.name}" template loaded. Add your business name and details, then build your page plan.`);
+  };
+
   const downloadBlob = (blob: Blob, fileName: string) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -661,6 +675,16 @@ export default function WebsiteBuilderPage() {
         <section className="website-brief-panel">
           <span className="eyebrow">PLAN AND BUILD PAGE BY PAGE</span><h1>Make your site one page at a time.</h1>
           <p>Describe your business, review the suggested page plan, then generate and refine only the pages you want. Your work saves as a draft.</p>
+          <div className="template-gallery">
+            <span className="eyebrow">START FROM A TEMPLATE</span>
+            <div className="template-grid">{WEBSITE_TEMPLATES.map((template) => <button key={template.id} type="button" className={`template-card${activeTemplate === template.id ? " template-card-active" : ""}`} style={{ borderTopColor: template.accent }} onClick={() => applyTemplate(template)}>
+              <span className="template-icon" style={{ background: template.accent }}>{template.icon}</span>
+              <strong>{template.name}</strong><small>{template.category}</small>
+              <p>{template.summary}</p>
+              <span className="template-pages">{template.pages.join(" · ")}</span>
+            </button>)}</div>
+            <small>Templates pre-fill the brief below. You can edit anything before building.</small>
+          </div>
           <form onSubmit={buildWebsite} className="website-form">
             <label>Business name<input value={businessName} onChange={(event) => setBusinessName(event.target.value)} placeholder="e.g. HelloCleaners" required /></label>
             <label>Industry<input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="e.g. Cleaning services" /></label>
